@@ -1,0 +1,2396 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Милый Котик в Лабиринте - Уровни</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+        
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            max-width: 1200px;
+            width: 100%;
+            gap: 20px;
+            position: relative;
+            z-index: 1;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        
+        h1 {
+            font-size: 2.8rem;
+            margin-bottom: 8px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+            color: #fff;
+        }
+        
+        .subtitle {
+            font-size: 1.2rem;
+            opacity: 0.9;
+            margin-bottom: 10px;
+        }
+        
+        /* Экран выбора уровней */
+        .level-select-screen {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .level-select-title {
+            font-size: 2.2rem;
+            margin-bottom: 20px;
+            color: #FFD700;
+            text-align: center;
+        }
+        
+        .levels-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            width: 100%;
+            max-width: 800px;
+            margin-bottom: 30px;
+        }
+        
+        @media (max-width: 768px) {
+            .levels-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .levels-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .level-card {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 15px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            border: 3px solid transparent;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+        
+        .level-card.unlocked {
+            border-color: #9370DB;
+        }
+        
+        .level-card.unlocked:hover {
+            transform: translateY(-5px);
+            border-color: #FFD700;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+        }
+        
+        .level-card.locked {
+            opacity: 0.6;
+            cursor: not-allowed;
+            background: rgba(0, 0, 0, 0.5);
+        }
+        
+        .level-card.new {
+            animation: pulse 2s infinite;
+            border-color: #FFD700;
+        }
+        
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(255, 215, 0, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0); }
+        }
+        
+        .level-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #9370DB;
+            margin-bottom: 10px;
+        }
+        
+        .level-card.unlocked .level-number {
+            color: #FFD700;
+        }
+        
+        .level-name {
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .level-description {
+            font-size: 0.9rem;
+            opacity: 0.8;
+            margin-bottom: 15px;
+            min-height: 40px;
+        }
+        
+        .level-stats {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            margin-top: 10px;
+        }
+        
+        .best-score {
+            font-size: 0.9rem;
+            color: #90EE90;
+            margin-bottom: 5px;
+        }
+        
+        .stars {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 10px;
+        }
+        
+        .star {
+            font-size: 1.2rem;
+            color: #ccc;
+        }
+        
+        .star.filled {
+            color: #FFD700;
+        }
+        
+        .lock-icon {
+            font-size: 2rem;
+            margin-bottom: 10px;
+            color: #aaa;
+        }
+        
+        .current-level-indicator {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 1.5rem;
+        }
+        
+        /* Игровой экран */
+        .game-screen {
+            width: 100%;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            z-index: 2;
+        }
+        
+        .game-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            margin-bottom: 15px;
+            padding: 0 10px;
+        }
+        
+        .current-level-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1.2rem;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 8px 15px;
+            border-radius: 10px;
+        }
+        
+        .back-to-levels {
+            padding: 10px 20px;
+            background-color: rgba(147, 112, 219, 0.8);
+            border: none;
+            border-radius: 50px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .back-to-levels:hover {
+            background-color: #8A2BE2;
+            transform: translateY(-2px);
+        }
+        
+        .game-wrapper {
+            position: relative;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        #gameCanvas {
+            background-color: #2a2a3a;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            max-width: 100%;
+            display: block;
+        }
+        
+        .stats {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            background-color: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 15px 25px;
+            margin-bottom: 15px;
+            font-size: 1.4rem;
+            font-weight: bold;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+        }
+        
+        .steps {
+            color: #FFD700;
+        }
+        
+        .timer {
+            color: #90EE90;
+        }
+        
+        .controls {
+            margin-top: 20px;
+            text-align: center;
+        }
+        
+        .keyboard-controls {
+            margin-bottom: 20px;
+        }
+        
+        .keyboard-controls h3 {
+            margin-bottom: 10px;
+            font-size: 1.2rem;
+        }
+        
+        .keys {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        .key {
+            background-color: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 8px 15px;
+            font-weight: bold;
+            min-width: 50px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+        
+        .mobile-controls {
+            display: none;
+            margin-top: 25px;
+            width: 100%;
+        }
+        
+        .mobile-controls h3 {
+            margin-bottom: 15px;
+            font-size: 1.2rem;
+        }
+        
+        .control-buttons {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            gap: 15px;
+            max-width: 300px;
+            margin: 0 auto;
+        }
+        
+        .control-btn {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            background-color: rgba(147, 112, 219, 0.8);
+            border: none;
+            color: white;
+            font-size: 1.8rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .control-btn:active {
+            transform: scale(0.95);
+            background-color: rgba(138, 43, 226, 0.8);
+        }
+        
+        .btn-up {
+            grid-column: 2;
+            grid-row: 1;
+        }
+        
+        .btn-left {
+            grid-column: 1;
+            grid-row: 2;
+        }
+        
+        .btn-right {
+            grid-column: 3;
+            grid-row: 2;
+        }
+        
+        .btn-down {
+            grid-column: 2;
+            grid-row: 3;
+        }
+        
+        .btn-center {
+            grid-column: 2;
+            grid-row: 2;
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        .actions {
+            margin-top: 20px;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        
+        .btn {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 50px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+        
+        .btn-primary {
+            background-color: #9370DB;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background-color: #8A2BE2;
+            transform: translateY(-3px);
+        }
+        
+        .btn-secondary {
+            background-color: transparent;
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.5);
+        }
+        
+        .btn-secondary:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+            transform: translateY(-3px);
+        }
+        
+        .instructions {
+            background-color: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+            max-width: 800px;
+            width: 100%;
+        }
+        
+        .instructions h3 {
+            margin-bottom: 10px;
+            color: #FFD700;
+        }
+        
+        .instructions ul {
+            padding-left: 20px;
+        }
+        
+        .instructions li {
+            margin-bottom: 8px;
+            line-height: 1.5;
+        }
+        
+        .message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0);
+            background-color: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 30px 50px;
+            border-radius: 15px;
+            text-align: center;
+            font-size: 2.5rem;
+            font-weight: bold;
+            z-index: 100;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            border: 3px solid #9370DB;
+            width: 90%;
+            max-width: 600px;
+        }
+        
+        .message.show {
+            transform: translate(-50%, -50%) scale(1);
+        }
+        
+        .message-title {
+            color: #FFD700;
+            margin-bottom: 15px;
+        }
+        
+        .message-stats {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin: 20px 0;
+            font-size: 1.5rem;
+        }
+        
+        .steps-count {
+            color: #FFD700;
+            font-size: 2rem;
+            margin: 10px 0;
+        }
+        
+        .stars-earned {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin: 15px 0;
+        }
+        
+        .star-earned {
+            font-size: 2rem;
+            color: #ccc;
+            transition: color 0.5s ease;
+        }
+        
+        .star-earned.filled {
+            color: #FFD700;
+        }
+        
+        .message-actions {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 25px;
+            flex-wrap: wrap;
+        }
+        
+        .message-btn {
+            padding: 12px 25px;
+            font-size: 1.1rem;
+        }
+        
+        .unlock-animation {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+        
+        .unlock-animation.show {
+            opacity: 1;
+            display: flex;
+        }
+        
+        .unlock-icon {
+            font-size: 5rem;
+            color: #FFD700;
+            margin-bottom: 20px;
+            animation: bounce 1s infinite alternate;
+        }
+        
+        @keyframes bounce {
+            from { transform: translateY(0); }
+            to { transform: translateY(-20px); }
+        }
+        
+        .unlock-text {
+            font-size: 2.5rem;
+            color: #FFD700;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .unlock-level-name {
+            font-size: 2rem;
+            color: #9370DB;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        .footer {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 0.9rem;
+            opacity: 0.7;
+        }
+        
+        .first-time-hint {
+            background-color: rgba(255, 215, 0, 0.2);
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 20px;
+            text-align: center;
+            border-left: 5px solid #FFD700;
+            animation: fadeInOut 3s ease-in-out;
+            display: none;
+        }
+        
+        @keyframes fadeInOut {
+            0%, 100% { opacity: 0; }
+            50% { opacity: 1; }
+        }
+        
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2.2rem;
+            }
+            
+            .level-select-title {
+                font-size: 1.8rem;
+            }
+            
+            .stats {
+                font-size: 1.2rem;
+                padding: 12px 20px;
+            }
+            
+            .mobile-controls {
+                display: block;
+            }
+            
+            .keyboard-controls {
+                display: none;
+            }
+            
+            .control-btn {
+                width: 65px;
+                height: 65px;
+            }
+            
+            .game-header {
+                flex-direction: column;
+                gap: 15px;
+            }
+            
+            .message {
+                font-size: 2rem;
+                padding: 20px 30px;
+            }
+            
+            .steps-count {
+                font-size: 2.5rem;
+            }
+            
+            .message-actions {
+                flex-direction: column;
+                align-items: center;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            h1 {
+                font-size: 1.8rem;
+            }
+            
+            .level-select-title {
+                font-size: 1.5rem;
+            }
+            
+            .stats {
+                flex-direction: column;
+                align-items: center;
+                gap: 8px;
+            }
+            
+            .control-btn {
+                width: 60px;
+                height: 60px;
+            }
+            
+            .btn {
+                padding: 10px 20px;
+                font-size: 1rem;
+            }
+            
+            .message {
+                font-size: 1.8rem;
+                padding: 20px;
+            }
+            
+            .steps-count {
+                font-size: 2rem;
+            }
+            
+            .level-card {
+                padding: 15px;
+            }
+            
+            .level-number {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Милый Котик в Лабиринте</h1>
+            <p class="subtitle">Помоги фиолетовому котику найти выход из лабиринта!</p>
+        </header>
+        
+        <!-- Экран выбора уровней -->
+        <div class="level-select-screen" id="levelSelectScreen">
+            <h2 class="level-select-title">Выберите уровень</h2>
+            <div class="levels-grid" id="levelsGrid">
+                <!-- Уровни будут добавлены через JavaScript -->
+            </div>
+            <div class="instructions">
+                <h3>Как играть:</h3>
+                <ul>
+                    <li>Начинайте с уровня 1, чтобы разблокировать следующие уровни</li>
+                    <li>Используйте клавиши WASD или стрелки на экране, чтобы двигать котика по лабиринту</li>
+                    <li>Каждое движение на новую клетку = +1 шаг</li>
+                    <li>Остерегайтесь ловушек (оранжевые) - они блокируют движение на 2 секунды</li>
+                    <li>Телепорты (розовые) перемещают в случайное место</li>
+                    <li>Односторонние пути (синие) позволяют двигаться только в направлении стрелки</li>
+                    <li>Найдите зеленый выход, чтобы победить</li>
+                    <li>Постарайтесь пройти лабиринт за минимальное количество шагов!</li>
+                </ul>
+            </div>
+            <div id="firstTimeHint" class="first-time-hint">
+                Нажмите на уровень 1, чтобы начать игру!
+            </div>
+        </div>
+        
+        <!-- Игровой экран -->
+        <div class="game-screen" id="gameScreen">
+            <div class="game-header">
+                <div class="current-level-info">
+                    <span>Уровень <span id="currentLevelNumber">1</span>: <span id="currentLevelName">Начало пути</span></span>
+                </div>
+                <button id="backToLevelsBtn" class="back-to-levels">← К уровням</button>
+            </div>
+            
+            <div class="stats">
+                <div>Состояние: <span id="stateDisplay">Готов</span></div>
+                <div>Шаги: <span id="steps" class="steps">0</span></div>
+                <div>Время: <span id="timerDisplay" class="timer">00:00</span></div>
+            </div>
+            
+            <div class="game-wrapper">
+                <canvas id="gameCanvas"></canvas>
+                <div id="message" class="message">
+                    <div class="message-title" id="messageTitle">Победа!</div>
+                    <div class="message-stats">
+                        <div>Уровень: <span id="messageLevel">1</span></div>
+                        <div class="steps-count">Шагов: <span id="finalSteps">0</span></div>
+                        <div>Время: <span id="finalTime">00:00</span></div>
+                    </div>
+                    <div class="stars-earned">
+                        <div class="star-earned" id="star1">★</div>
+                        <div class="star-earned" id="star2">★</div>
+                        <div class="star-earned" id="star3">★</div>
+                    </div>
+                    <div class="message-actions">
+                        <button id="nextLevelBtn" class="btn btn-primary message-btn">Следующий уровень</button>
+                        <button id="restartLevelBtn" class="btn btn-secondary message-btn">Переиграть</button>
+                        <button id="toLevelsBtn" class="btn btn-secondary message-btn">К уровням</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="controls">
+                <div class="keyboard-controls">
+                    <h3>Управление (клавиатура)</h3>
+                    <div class="keys">
+                        <div class="key">W / Ц</div>
+                        <div class="key">A / Ф</div>
+                        <div class="key">S / Ы</div>
+                        <div class="key">D / В</div>
+                    </div>
+                </div>
+                
+                <div class="mobile-controls">
+                    <h3>Управление (касание)</h3>
+                    <div class="control-buttons">
+                        <button class="control-btn btn-up" id="upBtn">↑</button>
+                        <button class="control-btn btn-left" id="leftBtn">←</button>
+                        <div class="btn-center"></div>
+                        <button class="control-btn btn-right" id="rightBtn">→</button>
+                        <button class="control-btn btn-down" id="downBtn">↓</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="actions">
+                <button id="newGameBtn" class="btn btn-primary">Начать заново</button>
+                <button id="hintBtn" class="btn btn-secondary">Подсказка</button>
+            </div>
+        </div>
+        
+        <!-- Анимация разблокировки уровня -->
+        <div class="unlock-animation" id="unlockAnimation">
+            <div class="unlock-icon">🔓</div>
+            <div class="unlock-text">НОВЫЙ УРОВЕНЬ РАЗБЛОКИРОВАН!</div>
+            <div class="unlock-level-name" id="unlockedLevelName">Уровень 2</div>
+            <button id="closeUnlockBtn" class="btn btn-primary" style="margin-top: 20px;">Продолжить</button>
+        </div>
+        
+        <div class="footer">
+            <p>Игра создана с использованием HTML5 Canvas и чистого JavaScript</p>
+        </div>
+    </div>
+
+    <script>
+        // =============================================
+        // КОНСТАНТЫ И ПЕРЕМЕННЫЕ
+        // =============================================
+        
+        // Состояния игры
+        const GAME_STATES = {
+            IDLE: 'idle',
+            MOVING: 'moving',
+            WIN: 'win',
+            TRAPPED: 'trapped'  // Новое состояние - кот в ловушке
+        };
+
+        // Размеры лабиринта (в клетках)
+        const MAZE_SIZE = 15;
+
+        // Цвета
+        const COLORS = {
+            CAT_MAIN: '#9370DB',
+            CAT_ACCENT: '#8A2BE2',
+            CAT_EAR_INNER: '#FFB6C1',
+            MAZE_WALL: '#555',
+            EXIT: '#32CD32',
+            START: '#9370DB',
+            PATH: '#3A3A4A',
+            TEXT: '#FFFFFF',
+            HINT: 'rgba(255, 215, 0, 0.3)',
+            TRAP: '#FF4500',  // Цвет ловушки
+            TELEPORT: '#FF69B4'  // Цвет телепорта
+        };
+
+        // Коды клеток лабиринта
+        const CELL_TYPES = {
+            WALL: 1,
+            PATH: 0,
+            START: 2,
+            EXIT: 3,
+            TRAP: 4,      // Ловушка - блокирует на 2 секунды
+            TELEPORT: 5,  // Телепорт - перемещает в случайную точку
+            ONE_WAY_UP: 6,    // Односторонний путь (только вверх)
+            ONE_WAY_RIGHT: 7, // Односторонний путь (только вправо)
+            ONE_WAY_DOWN: 8,  // Односторонний путь (только вниз)
+            ONE_WAY_LEFT: 9   // Односторонний путь (только влево)
+        };
+
+        // =============================================
+        // ДАННЫЕ УРОВНЕЙ (ИСПРАВЛЕННЫЕ - ПРОХОДИМЫЕ)
+        // =============================================
+        
+        const LEVELS = [
+            {
+                id: 1,
+                name: "Начало пути",
+                description: "Простейший лабиринт для знакомства",
+                maze: [
+                    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                    [1, 2, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+                    [1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 0, 1],
+                    [1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 1],
+                    [1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 1],
+                    [1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+                    [1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1],
+                    [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1],
+                    [1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1],
+                    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+                    [1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1],
+                    [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1],
+                    [1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1],
+                    [1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 1],
+                    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+                ],
+                unlocked: true,
+                bestScore: 0,
+                stars: 0,
+                time: 0
+            },
+            {
+                id: 2,
+                name: "Первые ловушки",
+                description: "Появились простые ловушки",
+                maze: [
+                    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                    [1, 2, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1],
+                    [1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 0, 1],
+                    [1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1],
+                    [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1],
+                    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1],
+                    [1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1],
+                    [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 4, 0, 1],
+                    [1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1],
+                    [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
+                    [1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1],
+                    [1, 0, 0, 0, 1, 4, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+                    [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1],
+                    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 1],
+                    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+                ],
+                unlocked: false,
+                bestScore: 0,
+                stars: 0,
+                time: 0
+            },
+            {
+                id: 3,
+                name: "Телепорты и ловушки",
+                description: "Добавлены телепорты и больше ловушек",
+                maze: [
+                    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                    [1, 2, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1],
+                    [1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1],
+                    [1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1],
+                    [1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1],
+                    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 1],
+                    [1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1],
+                    [1, 0, 0, 0, 0, 0, 1, 0, 4, 0, 0, 0, 0, 0, 1],
+                    [1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1],
+                    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1],
+                    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1],
+                    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 1, 0, 1],
+                    [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1],
+                    [1, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 3, 1],
+                    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+                ],
+                unlocked: false,
+                bestScore: 0,
+                stars: 0,
+                time: 0
+            },
+            {
+                id: 4,
+                name: "Односторонние пути",
+                description: "Добавлены клетки с односторонним движением (ПРОСТОЙ)",
+                maze: [
+                    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                    [1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+                    [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1],
+                    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+                    [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1],
+                    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+                    [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+                    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1],
+                    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+                    [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+                    [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1],
+                    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 1],
+                    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+                ],
+                unlocked: false,
+                bestScore: 0,
+                stars: 0,
+                time: 0
+            },
+            {
+                id: 5,
+                name: "Комбинированная сложность",
+                description: "Все типы ловушек вместе",
+                maze: [
+                    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                    [1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+                    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1],
+                    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+                    [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+                    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1],
+                    [1, 0, 4, 0, 0, 5, 0, 0, 0, 4, 0, 0, 0, 0, 1],
+                    [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+                    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1],
+                    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+                    [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1],
+                    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 1],
+                    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+                ],
+                unlocked: false,
+                bestScore: 0,
+                stars: 0,
+                time: 0
+            },
+            {
+                id: 6,
+                name: "Мастер лабиринтов",
+                description: "Самый сложный уровень со всеми механиками",
+                maze: [
+                    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                    [1, 2, 0, 0, 0, 0, 0, 4, 0, 0, 0, 4, 0, 0, 1],
+                    [1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 0, 1],
+                    [1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 1],
+                    [1, 0, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 1],
+                    [1, 0, 0, 1, 0, 5, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+                    [1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1],
+                    [1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+                    [1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1],
+                    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+                    [1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1],
+                    [1, 0, 4, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1],
+                    [1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1],
+                    [1, 0, 0, 1, 0, 0, 5, 0, 0, 0, 0, 0, 0, 3, 1],
+                    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+                ],
+                unlocked: false,
+                bestScore: 0,
+                stars: 0,
+                time: 0
+            }
+        ];
+
+        // Пороги для звезд (в шагах)
+        const STAR_THRESHOLDS = {
+            1: {1: 30, 2: 40, 3: 50, 4: 40, 5: 70, 6: 80},  // 1 звезда
+            2: {1: 25, 2: 35, 3: 45, 4: 30, 5: 65, 6: 75},  // 2 звезды
+            3: {1: 20, 2: 30, 3: 40, 4: 20, 5: 60, 6: 70}   // 3 звезды
+        };
+
+        // Игровые переменные
+        let canvas, ctx;
+        let cellSize = 32;
+        let gameState = GAME_STATES.IDLE;
+        let catGridPos = {x: 1, y: 1};
+        let catPixelPos = {x: 0, y: 0};
+        let steps = 0;
+        let animationStartTime = 0;
+        let animationDuration = 200;
+        let moveDirection = null;
+        let targetGridPos = null;
+        let exitPos = {x: 13, y: 13};
+        let hintVisible = false;
+        let currentLevel = 0;
+        let gameStartTime = 0;
+        let gameTime = 0;
+        let timerInterval = null;
+        let currentMaze = [];
+
+        // Элементы DOM
+        let levelSelectScreen, gameScreen;
+        let levelsGrid;
+        let stepsDisplay, stateDisplay, timerDisplay, messageElement;
+        let messageTitle, messageLevel, finalStepsDisplay, finalTimeDisplay;
+        let star1, star2, star3;
+        let restartBtn, newGameBtn, hintBtn, nextLevelBtn, toLevelsBtn, restartLevelBtn;
+        let upBtn, downBtn, leftBtn, rightBtn;
+        let backToLevelsBtn;
+        let currentLevelNumber, currentLevelName;
+        let unlockAnimation, unlockedLevelName, closeUnlockBtn;
+        let firstTimeHint;
+
+        // =============================================
+        // ФУНКЦИИ УПРАВЛЕНИЯ УРОВНЯМИ
+        // =============================================
+        
+        // Загружает прогресс из localStorage
+        function loadProgress() {
+            const savedProgress = localStorage.getItem('catMazeProgress');
+            if (savedProgress) {
+                try {
+                    const progress = JSON.parse(savedProgress);
+                    
+                    // Обновляем уровни из сохраненного прогресса
+                    for (let i = 0; i < LEVELS.length; i++) {
+                        if (progress[i]) {
+                            LEVELS[i].unlocked = progress[i].unlocked || false;
+                            LEVELS[i].bestScore = progress[i].bestScore || 0;
+                            LEVELS[i].stars = progress[i].stars || 0;
+                            LEVELS[i].time = progress[i].time || 0;
+                        }
+                    }
+                } catch (e) {
+                    console.log("Не удалось загрузить прогресс, начиная с начала");
+                }
+            }
+            
+            // Уровень 1 всегда разблокирован
+            LEVELS[0].unlocked = true;
+        }
+
+        // Сохраняет прогресс в localStorage
+        function saveProgress() {
+            const progress = LEVELS.map(level => ({
+                unlocked: level.unlocked,
+                bestScore: level.bestScore,
+                stars: level.stars,
+                time: level.time
+            }));
+            
+            localStorage.setItem('catMazeProgress', JSON.stringify(progress));
+        }
+
+        // Отображает экран выбора уровней
+        function showLevelSelect() {
+            if (levelSelectScreen) levelSelectScreen.style.display = 'flex';
+            if (gameScreen) gameScreen.style.display = 'none';
+            if (unlockAnimation) unlockAnimation.style.display = 'none';
+            renderLevels();
+            
+            // Показываем подсказку для новых игроков
+            if (isFirstVisit() && firstTimeHint) {
+                setTimeout(() => {
+                    firstTimeHint.style.display = 'block';
+                    setTimeout(() => {
+                        firstTimeHint.style.display = 'none';
+                    }, 5000);
+                }, 1000);
+            }
+        }
+
+        // Проверяет, первый ли это визит игрока
+        function isFirstVisit() {
+            const visited = localStorage.getItem('catMazeVisited');
+            if (!visited) {
+                localStorage.setItem('catMazeVisited', 'true');
+                return true;
+            }
+            return false;
+        }
+
+        // Рендерит карточки уровней
+        function renderLevels() {
+            if (!levelsGrid) return;
+            
+            levelsGrid.innerHTML = '';
+            
+            LEVELS.forEach(level => {
+                const levelCard = document.createElement('div');
+                levelCard.className = `level-card ${level.unlocked ? 'unlocked' : 'locked'}`;
+                levelCard.dataset.levelId = level.id;
+                
+                // Если уровень только что разблокирован, добавляем анимацию
+                if (level.unlocked && level.id > 1 && level.bestScore === 0) {
+                    levelCard.classList.add('new');
+                }
+                
+                levelCard.innerHTML = `
+                    ${level.unlocked ? 
+                        `<div class="level-number">${level.id}</div>` : 
+                        `<div class="lock-icon">🔒</div>`
+                    }
+                    <div class="level-name">${level.name}</div>
+                    <div class="level-description">${level.description}</div>
+                    <div class="level-stats">
+                        ${level.bestScore > 0 ? 
+                            `<div class="best-score">Лучший: ${level.bestScore} шагов</div>` : 
+                            `<div class="best-score">Не пройден</div>`
+                        }
+                        <div class="stars">
+                            <div class="star ${level.stars >= 1 ? 'filled' : ''}">★</div>
+                            <div class="star ${level.stars >= 2 ? 'filled' : ''}">★</div>
+                            <div class="star ${level.stars >= 3 ? 'filled' : ''}">★</div>
+                        </div>
+                    </div>
+                    ${level.unlocked && level.id === currentLevel ? 
+                        `<div class="current-level-indicator">😺</div>` : ''
+                    }
+                `;
+                
+                if (level.unlocked) {
+                    levelCard.addEventListener('click', () => startLevel(level.id));
+                }
+                
+                levelsGrid.appendChild(levelCard);
+            });
+        }
+
+        // Начинает уровень
+        function startLevel(levelId) {
+            currentLevel = levelId;
+            const level = LEVELS[levelId - 1];
+            
+            // Обновляем информацию о текущем уровне
+            if (currentLevelNumber) currentLevelNumber.textContent = level.id;
+            if (currentLevelName) currentLevelName.textContent = level.name;
+            if (messageLevel) messageLevel.textContent = level.id;
+            
+            // Загружаем лабиринт уровня
+            currentMaze = JSON.parse(JSON.stringify(level.maze));
+            
+            // Находим позиции старта и выхода
+            findStartPosition();
+            findExitPosition();
+            
+            // Сбрасываем игровые переменные
+            resetGameVariables();
+            
+            // Показываем игровой экран
+            if (levelSelectScreen) levelSelectScreen.style.display = 'none';
+            if (gameScreen) gameScreen.style.display = 'flex';
+            if (unlockAnimation) unlockAnimation.style.display = 'none';
+            
+            // Запускаем таймер
+            startTimer();
+            
+            // Обновляем UI
+            updateUI();
+            
+            // Перерисовываем лабиринт
+            resizeCanvas();
+        }
+
+        // Находит позицию выхода в лабиринте
+        function findExitPosition() {
+            for (let y = 0; y < MAZE_SIZE; y++) {
+                for (let x = 0; x < MAZE_SIZE; x++) {
+                    if (currentMaze[y][x] === CELL_TYPES.EXIT) {
+                        exitPos = {x, y};
+                        return;
+                    }
+                }
+            }
+            // Если не нашли выход, используем (13, 13)
+            exitPos = {x: 13, y: 13};
+        }
+
+        // Сбрасывает игровые переменные
+        function resetGameVariables() {
+            gameState = GAME_STATES.IDLE;
+            steps = 0;
+            moveDirection = null;
+            hintVisible = false;
+            gameTime = 0;
+            
+            // Находим стартовую позицию
+            findStartPosition();
+            
+            // Сбрасываем пиксельную позицию
+            catPixelPos.x = catGridPos.x * cellSize;
+            catPixelPos.y = catGridPos.y * cellSize;
+            
+            // Скрываем сообщение о победе
+            if (messageElement) messageElement.classList.remove('show');
+        }
+
+        // Запускает таймер
+        function startTimer() {
+            gameStartTime = Date.now();
+            
+            if (timerInterval) {
+                clearInterval(timerInterval);
+            }
+            
+            timerInterval = setInterval(() => {
+                gameTime = Math.floor((Date.now() - gameStartTime) / 1000);
+                updateTimerDisplay();
+            }, 1000);
+        }
+
+        // Обновляет отображение таймера
+        function updateTimerDisplay() {
+            if (!timerDisplay) return;
+            const minutes = Math.floor(gameTime / 60);
+            const seconds = gameTime % 60;
+            timerDisplay.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
+
+        // Останавливает таймер
+        function stopTimer() {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+        }
+
+        // Завершает уровень
+        function completeLevel() {
+            stopTimer();
+            gameState = GAME_STATES.WIN;
+            
+            const level = LEVELS[currentLevel - 1];
+            const starsEarned = calculateStars(steps, currentLevel);
+            
+            // Обновляем лучший результат, если текущий лучше
+            if (level.bestScore === 0 || steps < level.bestScore) {
+                level.bestScore = steps;
+                level.stars = starsEarned;
+                level.time = gameTime;
+            } else if (steps === level.bestScore && starsEarned > level.stars) {
+                // Если шаги одинаковые, но звезд больше
+                level.stars = starsEarned;
+            }
+            
+            // Сохраняем прогресс
+            saveProgress();
+            
+            // Разблокируем следующий уровень, если он существует
+            if (currentLevel < LEVELS.length) {
+                const nextLevel = LEVELS[currentLevel];
+                if (!nextLevel.unlocked) {
+                    nextLevel.unlocked = true;
+                    saveProgress();
+                    
+                    // Показываем анимацию разблокировки
+                    showUnlockAnimation(currentLevel + 1);
+                }
+            }
+            
+            // Показываем сообщение о победе
+            showWinMessage(starsEarned);
+        }
+
+        // Рассчитывает количество звезд за уровень
+        function calculateStars(steps, levelId) {
+            if (steps <= STAR_THRESHOLDS[3][levelId]) return 3;
+            if (steps <= STAR_THRESHOLDS[2][levelId]) return 2;
+            if (steps <= STAR_THRESHOLDS[1][levelId]) return 1;
+            return 0;
+        }
+
+        // Показывает анимацию разблокировки уровня
+        function showUnlockAnimation(levelId) {
+            const level = LEVELS[levelId - 1];
+            if (unlockedLevelName) unlockedLevelName.textContent = `Уровень ${levelId}: ${level.name}`;
+            if (unlockAnimation) {
+                unlockAnimation.style.display = 'flex';
+                setTimeout(() => {
+                    unlockAnimation.classList.add('show');
+                }, 10);
+            }
+            
+            // Воспроизводим звуковой эффект (эмулируем)
+            playUnlockSound();
+        }
+
+        // Эмулирует звук разблокировки
+        function playUnlockSound() {
+            // В реальном приложении здесь был бы Audio API
+            // Для примера просто создаем вибрацию на мобильных устройствах
+            if (navigator.vibrate) {
+                navigator.vibrate([100, 50, 100]);
+            }
+        }
+
+        // Показывает сообщение о победе
+        function showWinMessage(starsEarned) {
+            if (!messageTitle || !finalStepsDisplay || !finalTimeDisplay) return;
+            
+            messageTitle.textContent = "Уровень пройден!";
+            finalStepsDisplay.textContent = steps;
+            
+            // Форматируем время
+            const minutes = Math.floor(gameTime / 60);
+            const seconds = gameTime % 60;
+            finalTimeDisplay.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            
+            // Анимируем звезды
+            if (star1 && star2 && star3) {
+                star1.classList.remove('filled');
+                star2.classList.remove('filled');
+                star3.classList.remove('filled');
+                
+                setTimeout(() => {
+                    if (starsEarned >= 1) star1.classList.add('filled');
+                }, 300);
+                
+                setTimeout(() => {
+                    if (starsEarned >= 2) star2.classList.add('filled');
+                }, 600);
+                
+                setTimeout(() => {
+                    if (starsEarned >= 3) star3.classList.add('filled');
+                }, 900);
+            }
+            
+            // Показываем кнопку следующего уровня только если есть следующий уровень
+            if (nextLevelBtn) {
+                if (currentLevel < LEVELS.length) {
+                    nextLevelBtn.style.display = 'block';
+                } else {
+                    nextLevelBtn.style.display = 'none';
+                }
+            }
+            
+            setTimeout(() => {
+                if (messageElement) messageElement.classList.add('show');
+            }, 500);
+        }
+
+        // =============================================
+        // ОСНОВНЫЕ ФУНКЦИИ ИГРЫ
+        // =============================================
+        
+        // Инициализация игры
+        function init() {
+            console.log("Инициализация игры...");
+            
+            // Получаем элементы DOM
+            canvas = document.getElementById('gameCanvas');
+            if (!canvas) {
+                console.error("Canvas не найден!");
+                return;
+            }
+            ctx = canvas.getContext('2d');
+            
+            levelSelectScreen = document.getElementById('levelSelectScreen');
+            gameScreen = document.getElementById('gameScreen');
+            levelsGrid = document.getElementById('levelsGrid');
+            
+            stepsDisplay = document.getElementById('steps');
+            stateDisplay = document.getElementById('stateDisplay');
+            timerDisplay = document.getElementById('timerDisplay');
+            messageElement = document.getElementById('message');
+            messageTitle = document.getElementById('messageTitle');
+            messageLevel = document.getElementById('messageLevel');
+            finalStepsDisplay = document.getElementById('finalSteps');
+            finalTimeDisplay = document.getElementById('finalTime');
+            
+            star1 = document.getElementById('star1');
+            star2 = document.getElementById('star2');
+            star3 = document.getElementById('star3');
+            
+            restartBtn = document.getElementById('newGameBtn');
+            newGameBtn = document.getElementById('newGameBtn');
+            hintBtn = document.getElementById('hintBtn');
+            nextLevelBtn = document.getElementById('nextLevelBtn');
+            toLevelsBtn = document.getElementById('toLevelsBtn');
+            restartLevelBtn = document.getElementById('restartLevelBtn');
+            
+            upBtn = document.getElementById('upBtn');
+            downBtn = document.getElementById('downBtn');
+            leftBtn = document.getElementById('leftBtn');
+            rightBtn = document.getElementById('rightBtn');
+            
+            backToLevelsBtn = document.getElementById('backToLevelsBtn');
+            
+            currentLevelNumber = document.getElementById('currentLevelNumber');
+            currentLevelName = document.getElementById('currentLevelName');
+            
+            unlockAnimation = document.getElementById('unlockAnimation');
+            unlockedLevelName = document.getElementById('unlockedLevelName');
+            closeUnlockBtn = document.getElementById('closeUnlockBtn');
+            
+            firstTimeHint = document.getElementById('firstTimeHint');
+            
+            console.log("Элементы DOM загружены:", {
+                canvas: !!canvas,
+                levelSelectScreen: !!levelSelectScreen,
+                gameScreen: !!gameScreen,
+                levelsGrid: !!levelsGrid
+            });
+            
+            // Загружаем прогресс
+            loadProgress();
+            
+            // Устанавливаем обработчики событий
+            setupEventListeners();
+            
+            // Показываем экран выбора уровней
+            showLevelSelect();
+            
+            // Начинаем игровой цикл
+            requestAnimationFrame(gameLoop);
+            
+            console.log("Игра инициализирована");
+        }
+
+        // Находит стартовую позицию кота в лабиринте
+        function findStartPosition() {
+            if (!currentMaze || currentMaze.length === 0) {
+                console.error("Лабиринт не загружен!");
+                return;
+            }
+            
+            for (let y = 0; y < MAZE_SIZE; y++) {
+                for (let x = 0; x < MAZE_SIZE; x++) {
+                    if (currentMaze[y][x] === CELL_TYPES.START) {
+                        catGridPos.x = x;
+                        catGridPos.y = y;
+                        return;
+                    }
+                }
+            }
+            // Если не нашли стартовую позицию, используем (1, 1)
+            catGridPos.x = 1;
+            catGridPos.y = 1;
+        }
+
+        // Устанавливает обработчики событий
+        function setupEventListeners() {
+            console.log("Настройка обработчиков событий...");
+            
+            // Управление с клавиатуры
+            document.addEventListener('keydown', handleKeyDown);
+            
+            // Кнопки мобильного управления
+            if (upBtn) upBtn.addEventListener('click', () => moveCat('up'));
+            if (downBtn) downBtn.addEventListener('click', () => moveCat('down'));
+            if (leftBtn) leftBtn.addEventListener('click', () => moveCat('left'));
+            if (rightBtn) rightBtn.addEventListener('click', () => moveCat('right'));
+            
+            // Кнопки действий
+            if (restartBtn) restartBtn.addEventListener('click', () => startLevel(currentLevel));
+            if (hintBtn) hintBtn.addEventListener('click', toggleHint);
+            if (nextLevelBtn) nextLevelBtn.addEventListener('click', () => {
+                if (currentLevel < LEVELS.length) {
+                    if (messageElement) messageElement.classList.remove('show');
+                    setTimeout(() => startLevel(currentLevel + 1), 300);
+                }
+            });
+            if (toLevelsBtn) toLevelsBtn.addEventListener('click', () => {
+                if (messageElement) messageElement.classList.remove('show');
+                setTimeout(showLevelSelect, 300);
+            });
+            if (restartLevelBtn) restartLevelBtn.addEventListener('click', () => {
+                if (messageElement) messageElement.classList.remove('show');
+                setTimeout(() => startLevel(currentLevel), 300);
+            });
+            
+            // Кнопка возврата к уровням
+            if (backToLevelsBtn) backToLevelsBtn.addEventListener('click', showLevelSelect);
+            
+            // Кнопка закрытия анимации разблокировки
+            if (closeUnlockBtn) closeUnlockBtn.addEventListener('click', () => {
+                if (unlockAnimation) {
+                    unlockAnimation.classList.remove('show');
+                    setTimeout(() => {
+                        unlockAnimation.style.display = 'none';
+                        showLevelSelect();
+                    }, 500);
+                }
+            });
+            
+            // Обработка изменения размера окна
+            window.addEventListener('resize', resizeCanvas);
+            
+            console.log("Обработчики событий настроены");
+        }
+
+        // Обрабатывает нажатие клавиш
+        function handleKeyDown(e) {
+            if (gameState === GAME_STATES.WIN || gameState === GAME_STATES.TRAPPED) return;
+            
+            // Проверяем русские и английские клавиши
+            switch(e.key.toLowerCase()) {
+                case 'w':
+                case 'ц':
+                case 'arrowup':
+                    moveCat('up');
+                    break;
+                case 'a':
+                case 'ф':
+                case 'arrowleft':
+                    moveCat('left');
+                    break;
+                case 's':
+                case 'ы':
+                case 'arrowdown':
+                    moveCat('down');
+                    break;
+                case 'd':
+                case 'в':
+                case 'arrowright':
+                    moveCat('right');
+                    break;
+            }
+        }
+
+        // Двигает кота в указанном направлении
+        function moveCat(direction) {
+            // Если кот уже движется или игра завершена, игнорируем
+            if (gameState === GAME_STATES.MOVING || gameState === GAME_STATES.WIN || gameState === GAME_STATES.TRAPPED) {
+                return;
+            }
+            
+            // Определяем целевую позицию
+            targetGridPos = {x: catGridPos.x, y: catGridPos.y};
+            
+            switch(direction) {
+                case 'up':
+                    targetGridPos.y--;
+                    break;
+                case 'down':
+                    targetGridPos.y++;
+                    break;
+                case 'left':
+                    targetGridPos.x--;
+                    break;
+                case 'right':
+                    targetGridPos.x++;
+                    break;
+            }
+            
+            // Проверяем, можно ли двигаться в целевую клетку
+            if (isMoveValid(targetGridPos.x, targetGridPos.y, direction)) {
+                moveDirection = direction;
+                gameState = GAME_STATES.MOVING;
+                animationStartTime = Date.now();
+                steps++;
+                updateUI();
+            }
+        }
+
+        // Проверяет, является ли перемещение допустимым
+        function isMoveValid(x, y, direction) {
+            // Проверяем границы лабиринта
+            if (x < 0 || x >= MAZE_SIZE || y < 0 || y >= MAZE_SIZE) {
+                return false;
+            }
+            
+            const cellType = currentMaze[y][x];
+            
+            // Проверяем, не является ли клетка стеной
+            if (cellType === CELL_TYPES.WALL) {
+                return false;
+            }
+            
+            // Проверяем односторонние пути
+            if (direction) {
+                switch(cellType) {
+                    case CELL_TYPES.ONE_WAY_UP:
+                        if (direction !== 'up') return false;
+                        break;
+                    case CELL_TYPES.ONE_WAY_RIGHT:
+                        if (direction !== 'right') return false;
+                        break;
+                    case CELL_TYPES.ONE_WAY_DOWN:
+                        if (direction !== 'down') return false;
+                        break;
+                    case CELL_TYPES.ONE_WAY_LEFT:
+                        if (direction !== 'left') return false;
+                        break;
+                }
+            }
+            
+            return true;
+        }
+
+        // Обновляет позицию кота во время анимации
+        function updateCatPosition() {
+            const currentTime = Date.now();
+            const elapsed = currentTime - animationStartTime;
+            const progress = Math.min(elapsed / animationDuration, 1);
+            
+            // Интерполяция для плавного движения
+            const startX = catGridPos.x * cellSize;
+            const startY = catGridPos.y * cellSize;
+            const targetX = targetGridPos.x * cellSize;
+            const targetY = targetGridPos.y * cellSize;
+            
+            // Используем функцию easeOutQuad для более естественного движения
+            const easeProgress = 1 - (1 - progress) * (1 - progress);
+            
+            catPixelPos.x = startX + (targetX - startX) * easeProgress;
+            catPixelPos.y = startY + (targetY - startY) * easeProgress;
+            
+            // Если анимация завершена
+            if (progress >= 1) {
+                // Обновляем позицию кота в сетке
+                catGridPos.x = targetGridPos.x;
+                catGridPos.y = targetGridPos.y;
+                
+                // Проверяем тип клетки, на которую встал кот
+                const cellType = currentMaze[catGridPos.y][catGridPos.x];
+                
+                switch(cellType) {
+                    case CELL_TYPES.EXIT:
+                        completeLevel();
+                        break;
+                        
+                    case CELL_TYPES.TRAP:
+                        activateTrap();
+                        break;
+                        
+                    case CELL_TYPES.TELEPORT:
+                        activateTeleport();
+                        break;
+                        
+                    default:
+                        gameState = GAME_STATES.IDLE;
+                }
+                
+                moveDirection = null;
+                updateUI();
+            }
+        }
+
+        // Активирует ловушку
+        function activateTrap() {
+            gameState = GAME_STATES.TRAPPED;
+            if (stateDisplay) stateDisplay.textContent = "В ловушке!";
+            
+            // Показываем сообщение о ловушке
+            showTrapMessage();
+            
+            // Блокируем управление на 2 секунды
+            setTimeout(() => {
+                if (gameState === GAME_STATES.TRAPPED) {
+                    gameState = GAME_STATES.IDLE;
+                    updateUI();
+                }
+            }, 2000);
+        }
+
+        // Активирует телепорт
+        function activateTeleport() {
+            gameState = GAME_STATES.MOVING;
+            if (stateDisplay) stateDisplay.textContent = "Телепортация!";
+            
+            // Находим все доступные клетки для телепортации
+            const availableCells = [];
+            for (let y = 0; y < MAZE_SIZE; y++) {
+                for (let x = 0; x < MAZE_SIZE; x++) {
+                    if (currentMaze[y][x] === CELL_TYPES.PATH || 
+                        currentMaze[y][x] === CELL_TYPES.START) {
+                        // Не телепортируем на текущую позицию или рядом с выходом
+                        if (!(x === catGridPos.x && y === catGridPos.y) &&
+                            !(Math.abs(x - exitPos.x) <= 1 && Math.abs(y - exitPos.y) <= 1)) {
+                            availableCells.push({x, y});
+                        }
+                    }
+                }
+            }
+            
+            if (availableCells.length > 0) {
+                // Выбираем случайную клетку
+                const randomCell = availableCells[Math.floor(Math.random() * availableCells.length)];
+                targetGridPos = randomCell;
+                
+                // Запускаем анимацию телепортации
+                animationStartTime = Date.now();
+                animationDuration = 500; // Быстрая анимация для телепортации
+                
+                // Показываем сообщение
+                showTeleportMessage();
+            } else {
+                gameState = GAME_STATES.IDLE;
+            }
+        }
+
+        // Показывает сообщение о ловушке
+        function showTrapMessage() {
+            // Создаем временное сообщение
+            const trapMsg = document.createElement('div');
+            trapMsg.className = 'message';
+            trapMsg.innerHTML = `
+                <div class="message-title" style="color: #FF4500">Ловушка!</div>
+                <div style="margin: 20px 0; font-size: 1.2rem">
+                    Котик застрял на 2 секунды!
+                </div>
+            `;
+            
+            document.querySelector('.game-wrapper').appendChild(trapMsg);
+            
+            // Анимация появления
+            setTimeout(() => {
+                trapMsg.classList.add('show');
+            }, 10);
+            
+            // Убираем сообщение через 1.5 секунды
+            setTimeout(() => {
+                trapMsg.classList.remove('show');
+                setTimeout(() => {
+                    trapMsg.remove();
+                }, 500);
+            }, 1500);
+        }
+
+        // Показывает сообщение о телепортации
+        function showTeleportMessage() {
+            const teleportMsg = document.createElement('div');
+            teleportMsg.className = 'message';
+            teleportMsg.innerHTML = `
+                <div class="message-title" style="color: #FF69B4">Телепортация!</div>
+                <div style="margin: 20px 0; font-size: 1.2rem">
+                    Котик перемещён в случайное место!
+                </div>
+            `;
+            
+            document.querySelector('.game-wrapper').appendChild(teleportMsg);
+            
+            setTimeout(() => {
+                teleportMsg.classList.add('show');
+            }, 10);
+            
+            setTimeout(() => {
+                teleportMsg.classList.remove('show');
+                setTimeout(() => {
+                    teleportMsg.remove();
+                }, 500);
+            }, 1500);
+        }
+
+        // Переключает отображение подсказки
+        function toggleHint() {
+            hintVisible = !hintVisible;
+            updateUI();
+        }
+
+        // Обновляет интерфейс
+        function updateUI() {
+            if (stepsDisplay) stepsDisplay.textContent = steps;
+            
+            // Обновляем отображение состояния
+            if (stateDisplay) {
+                switch(gameState) {
+                    case GAME_STATES.IDLE:
+                        stateDisplay.textContent = "Готов";
+                        break;
+                    case GAME_STATES.MOVING:
+                        stateDisplay.textContent = "Движется";
+                        break;
+                    case GAME_STATES.WIN:
+                        stateDisplay.textContent = "Победа!";
+                        break;
+                    case GAME_STATES.TRAPPED:
+                        stateDisplay.textContent = "В ловушке!";
+                        break;
+                }
+            }
+            
+            // Обновляем текст кнопки подсказки
+            if (hintBtn) {
+                hintBtn.textContent = hintVisible ? "Скрыть подсказку" : "Показать подсказку";
+            }
+        }
+
+        // Изменяет размер canvas
+        function resizeCanvas() {
+            if (!canvas) return;
+            
+            const container = document.querySelector('.game-wrapper');
+            if (!container) return;
+            
+            const maxWidth = container.clientWidth;
+            
+            // Рассчитываем размер клетки в зависимости от доступного пространства
+            const calculatedCellSize = Math.max(20, Math.floor(Math.min(maxWidth / MAZE_SIZE, 40)));
+            
+            // Обновляем размер клетки, только если он изменился
+            if (calculatedCellSize !== cellSize) {
+                cellSize = calculatedCellSize;
+                
+                // Пересчитываем пиксельную позицию кота
+                catPixelPos.x = catGridPos.x * cellSize;
+                catPixelPos.y = catGridPos.y * cellSize;
+            }
+            
+            // Устанавливаем размер canvas
+            canvas.width = MAZE_SIZE * cellSize;
+            canvas.height = MAZE_SIZE * cellSize;
+            
+            console.log("Canvas изменен до размеров:", canvas.width, "x", canvas.height);
+        }
+
+        // =============================================
+        // ОТРИСОВКА ИГРЫ
+        // =============================================
+        
+        // Основной игровой цикл
+        function gameLoop() {
+            // Очищаем canvas
+            if (!ctx || !canvas) {
+                requestAnimationFrame(gameLoop);
+                return;
+            }
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Отрисовываем лабиринт
+            drawMaze();
+            
+            // Если кот движется, обновляем его позицию
+            if (gameState === GAME_STATES.MOVING) {
+                updateCatPosition();
+            }
+            
+            // Отрисовываем кота
+            drawCat(catPixelPos.x, catPixelPos.y, cellSize);
+            
+            // Отрисовываем подсказку, если она включена
+            if (hintVisible) {
+                drawHint();
+            }
+            
+            // Продолжаем цикл
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Отрисовывает лабиринт
+        function drawMaze() {
+            if (!ctx || !currentMaze || currentMaze.length === 0) return;
+            
+            for (let y = 0; y < MAZE_SIZE; y++) {
+                for (let x = 0; x < MAZE_SIZE; x++) {
+                    const cellX = x * cellSize;
+                    const cellY = y * cellSize;
+                    
+                    // Выбираем цвет в зависимости от типа клетки
+                    let color;
+                    switch(currentMaze[y][x]) {
+                        case CELL_TYPES.PATH:
+                            color = COLORS.PATH;
+                            break;
+                        case CELL_TYPES.WALL:
+                            color = COLORS.MAZE_WALL;
+                            break;
+                        case CELL_TYPES.START:
+                            color = COLORS.START;
+                            break;
+                        case CELL_TYPES.EXIT:
+                            color = COLORS.EXIT;
+                            break;
+                        case CELL_TYPES.TRAP:
+                            color = COLORS.TRAP;
+                            break;
+                        case CELL_TYPES.TELEPORT:
+                            color = COLORS.TELEPORT;
+                            break;
+                        case CELL_TYPES.ONE_WAY_UP:
+                        case CELL_TYPES.ONE_WAY_RIGHT:
+                        case CELL_TYPES.ONE_WAY_DOWN:
+                        case CELL_TYPES.ONE_WAY_LEFT:
+                            color = '#4682B4'; // Синий для односторонних путей
+                            break;
+                        default:
+                            color = COLORS.PATH;
+                    }
+                    
+                    // Рисуем клетку
+                    ctx.fillStyle = color;
+                    ctx.fillRect(cellX, cellY, cellSize, cellSize);
+                    
+                    // Рисуем специальные символы
+                    switch(currentMaze[y][x]) {
+                        case CELL_TYPES.TRAP:
+                            drawTrap(cellX, cellY, cellSize);
+                            break;
+                        case CELL_TYPES.TELEPORT:
+                            drawTeleport(cellX, cellY, cellSize);
+                            break;
+                        case CELL_TYPES.ONE_WAY_UP:
+                            drawOneWay(cellX, cellY, cellSize, 'up');
+                            break;
+                        case CELL_TYPES.ONE_WAY_RIGHT:
+                            drawOneWay(cellX, cellY, cellSize, 'right');
+                            break;
+                        case CELL_TYPES.ONE_WAY_DOWN:
+                            drawOneWay(cellX, cellY, cellSize, 'down');
+                            break;
+                        case CELL_TYPES.ONE_WAY_LEFT:
+                            drawOneWay(cellX, cellY, cellSize, 'left');
+                            break;
+                    }
+                    
+                    // Рисуем границы для стен
+                    if (currentMaze[y][x] === CELL_TYPES.WALL) {
+                        ctx.strokeStyle = '#333';
+                        ctx.lineWidth = 2;
+                        ctx.strokeRect(cellX, cellY, cellSize, cellSize);
+                    }
+                    
+                    // Рисуем выход
+                    if (currentMaze[y][x] === CELL_TYPES.EXIT) {
+                        drawExit(cellX, cellY, cellSize);
+                    }
+                }
+            }
+            
+            // Рисуем сетку
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.lineWidth = 1;
+            
+            // Вертикальные линии
+            for (let x = 0; x <= MAZE_SIZE; x++) {
+                ctx.beginPath();
+                ctx.moveTo(x * cellSize, 0);
+                ctx.lineTo(x * cellSize, canvas.height);
+                ctx.stroke();
+            }
+            
+            // Горизонтальные линии
+            for (let y = 0; y <= MAZE_SIZE; y++) {
+                ctx.beginPath();
+                ctx.moveTo(0, y * cellSize);
+                ctx.lineTo(canvas.width, y * cellSize);
+                ctx.stroke();
+            }
+        }
+
+        // Рисует ловушку
+        function drawTrap(x, y, size) {
+            if (!ctx) return;
+            
+            // Рисуем знак опасности
+            ctx.fillStyle = '#FFFFFF';
+            ctx.beginPath();
+            ctx.moveTo(x + size/2, y + size*0.2);
+            ctx.lineTo(x + size*0.8, y + size*0.8);
+            ctx.lineTo(x + size*0.2, y + size*0.8);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Восклицательный знак
+            ctx.fillStyle = '#FF4500';
+            ctx.fillRect(x + size*0.47, y + size*0.3, size*0.06, size*0.3);
+            ctx.beginPath();
+            ctx.arc(x + size/2, y + size*0.65, size*0.05, 0, Math.PI*2);
+            ctx.fill();
+        }
+
+        // Рисует телепорт
+        function drawTeleport(x, y, size) {
+            if (!ctx) return;
+            
+            // Спираль телепорта
+            ctx.strokeStyle = '#FFFFFF';
+            ctx.lineWidth = size * 0.08;
+            ctx.beginPath();
+            ctx.arc(x + size/2, y + size/2, size*0.4, 0, Math.PI*2);
+            ctx.stroke();
+            
+            // Стрелки
+            ctx.fillStyle = '#FFFFFF';
+            ctx.beginPath();
+            ctx.moveTo(x + size/2, y + size*0.1);
+            ctx.lineTo(x + size*0.6, y + size*0.3);
+            ctx.lineTo(x + size*0.4, y + size*0.3);
+            ctx.closePath();
+            ctx.fill();
+            
+            ctx.beginPath();
+            ctx.moveTo(x + size/2, y + size*0.9);
+            ctx.lineTo(x + size*0.6, y + size*0.7);
+            ctx.lineTo(x + size*0.4, y + size*0.7);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        // Рисует односторонний путь
+        function drawOneWay(x, y, size, direction) {
+            if (!ctx) return;
+            
+            ctx.fillStyle = '#FFFFFF';
+            
+            switch(direction) {
+                case 'up':
+                    // Стрелка вверх
+                    ctx.beginPath();
+                    ctx.moveTo(x + size/2, y + size*0.2);
+                    ctx.lineTo(x + size*0.3, y + size*0.5);
+                    ctx.lineTo(x + size*0.7, y + size*0.5);
+                    ctx.closePath();
+                    ctx.fill();
+                    break;
+                    
+                case 'right':
+                    // Стрелка вправо
+                    ctx.beginPath();
+                    ctx.moveTo(x + size*0.8, y + size/2);
+                    ctx.lineTo(x + size*0.5, y + size*0.3);
+                    ctx.lineTo(x + size*0.5, y + size*0.7);
+                    ctx.closePath();
+                    ctx.fill();
+                    break;
+                    
+                case 'down':
+                    // Стрелка вниз
+                    ctx.beginPath();
+                    ctx.moveTo(x + size/2, y + size*0.8);
+                    ctx.lineTo(x + size*0.3, y + size*0.5);
+                    ctx.lineTo(x + size*0.7, y + size*0.5);
+                    ctx.closePath();
+                    ctx.fill();
+                    break;
+                    
+                case 'left':
+                    // Стрелка влево
+                    ctx.beginPath();
+                    ctx.moveTo(x + size*0.2, y + size/2);
+                    ctx.lineTo(x + size*0.5, y + size*0.3);
+                    ctx.lineTo(x + size*0.5, y + size*0.7);
+                    ctx.closePath();
+                    ctx.fill();
+                    break;
+            }
+        }
+
+        // Рисует выход
+        function drawExit(x, y, size) {
+            if (!ctx) return;
+            
+            // Рисуем дверь
+            ctx.fillStyle = '#228B22';
+            const doorWidth = size * 0.6;
+            const doorHeight = size * 0.8;
+            const doorX = x + (size - doorWidth) / 2;
+            const doorY = y + (size - doorHeight) / 2;
+            ctx.fillRect(doorX, doorY, doorWidth, doorHeight);
+            
+            // Ручка двери
+            ctx.fillStyle = '#FFD700';
+            ctx.beginPath();
+            ctx.arc(doorX + doorWidth * 0.8, doorY + doorHeight / 2, size * 0.08, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Надпись "Выход"
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = `bold ${size * 0.3}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('Выход', x + size / 2, y + size / 2);
+        }
+
+        // Рисует подсказку (путь к выходу)
+        function drawHint() {
+            if (!ctx) return;
+            
+            // Простой алгоритм поиска пути (жадный)
+            let currentX = catGridPos.x;
+            let currentY = catGridPos.y;
+            
+            // Создаем копию лабиринта для поиска пути
+            const mazeCopy = JSON.parse(JSON.stringify(currentMaze));
+            
+            // Алгоритм поиска в глубину для нахождения пути к выходу
+            const path = findPathDFS(mazeCopy, currentX, currentY, exitPos.x, exitPos.y);
+            
+            // Рисуем путь
+            if (path && path.length > 0) {
+                for (let i = 0; i < path.length; i++) {
+                    const point = path[i];
+                    const cellX = point.x * cellSize;
+                    const cellY = point.y * cellSize;
+                    
+                    // Пропускаем текущую позицию кота и выход
+                    if ((point.x === catGridPos.x && point.y === catGridPos.y) || 
+                        (point.x === exitPos.x && point.y === exitPos.y)) {
+                        continue;
+                    }
+                    
+                    // Рисуем круг-подсказку
+                    ctx.fillStyle = COLORS.HINT;
+                    ctx.beginPath();
+                    ctx.arc(cellX + cellSize/2, cellY + cellSize/2, cellSize * 0.3, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+        }
+
+        // Простой алгоритм поиска пути в глубину
+        function findPathDFS(maze, startX, startY, endX, endY) {
+            const stack = [{x: startX, y: startY, path: []}];
+            const visited = new Set();
+            
+            while (stack.length > 0) {
+                const {x, y, path} = stack.pop();
+                const key = `${x},${y}`;
+                
+                if (visited.has(key)) continue;
+                visited.add(key);
+                
+                const newPath = [...path, {x, y}];
+                
+                // Если достигли выхода
+                if (x === endX && y === endY) {
+                    return newPath;
+                }
+                
+                // Проверяем соседние клетки
+                const directions = [
+                    {dx: 0, dy: -1}, // вверх
+                    {dx: 1, dy: 0},  // вправо
+                    {dx: 0, dy: 1},  // вниз
+                    {dx: -1, dy: 0}  // влево
+                ];
+                
+                for (const dir of directions) {
+                    const newX = x + dir.dx;
+                    const newY = y + dir.dy;
+                    
+                    if (newX >= 0 && newX < MAZE_SIZE && 
+                        newY >= 0 && newY < MAZE_SIZE &&
+                        maze[newY][newX] !== 1 && 
+                        !visited.has(`${newX},${newY}`)) {
+                        stack.push({x: newX, y: newY, path: newPath});
+                    }
+                }
+            }
+            
+            return null; // Путь не найден
+        }
+
+        // Рисует кота (сохранена оригинальная функция)
+        function drawCat(x, y, size) {
+            // Сохраняем контекст
+            if (!ctx) return;
+            ctx.save();
+            
+            // Центр кота
+            const centerX = x + size / 2;
+            const centerY = y + size / 2;
+            
+            // Тело (пухлый овал)
+            drawBody(centerX, centerY, size);
+            
+            // Голова (круглая)
+            drawHead(centerX, centerY, size);
+            
+            // Ушки
+            drawEars(centerX, centerY, size);
+            
+            // Глаза
+            drawEyes(centerX, centerY, size);
+            
+            // Носик
+            drawNose(centerX, centerY, size);
+            
+            // Усы
+            drawWhiskers(centerX, centerY, size);
+            
+            // Лапки
+            drawPaws(centerX, centerY, size);
+            
+            // Хвост
+            drawTail(centerX, centerY, size);
+            
+            // Восстанавливаем контекст
+            ctx.restore();
+        }
+
+        // Рисует тело кота
+        function drawBody(centerX, centerY, size) {
+            const bodyWidth = size * 0.9;
+            const bodyHeight = size * 0.7;
+            
+            ctx.fillStyle = COLORS.CAT_MAIN;
+            ctx.beginPath();
+            ctx.ellipse(centerX, centerY + size * 0.1, bodyWidth/2, bodyHeight/2, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Добавляем тень для объема
+            ctx.fillStyle = COLORS.CAT_ACCENT;
+            ctx.beginPath();
+            ctx.ellipse(centerX - size * 0.1, centerY + size * 0.05, bodyWidth/2.2, bodyHeight/2.2, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Рисует голову кота
+        function drawHead(centerX, centerY, size) {
+            const headRadius = size * 0.4;
+            
+            ctx.fillStyle = COLORS.CAT_MAIN;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY - size * 0.15, headRadius, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Рисует ушки кота
+        function drawEars(centerX, centerY, size) {
+            const earSize = size * 0.25;
+            const headRadius = size * 0.4;
+            
+            // Левое ухо
+            ctx.fillStyle = COLORS.CAT_MAIN;
+            ctx.beginPath();
+            ctx.moveTo(centerX - size * 0.25, centerY - size * 0.55);
+            ctx.lineTo(centerX - size * 0.45, centerY - size * 0.75);
+            ctx.lineTo(centerX - size * 0.15, centerY - size * 0.55);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Внутренняя часть левого уха
+            ctx.fillStyle = COLORS.CAT_EAR_INNER;
+            ctx.beginPath();
+            ctx.moveTo(centerX - size * 0.25, centerY - size * 0.55);
+            ctx.lineTo(centerX - size * 0.4, centerY - size * 0.7);
+            ctx.lineTo(centerX - size * 0.18, centerY - size * 0.55);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Правое ухо
+            ctx.fillStyle = COLORS.CAT_MAIN;
+            ctx.beginPath();
+            ctx.moveTo(centerX + size * 0.25, centerY - size * 0.55);
+            ctx.lineTo(centerX + size * 0.45, centerY - size * 0.75);
+            ctx.lineTo(centerX + size * 0.15, centerY - size * 0.55);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Внутренняя часть правого уха
+            ctx.fillStyle = COLORS.CAT_EAR_INNER;
+            ctx.beginPath();
+            ctx.moveTo(centerX + size * 0.25, centerY - size * 0.55);
+            ctx.lineTo(centerX + size * 0.4, centerY - size * 0.7);
+            ctx.lineTo(centerX + size * 0.18, centerY - size * 0.55);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        // Рисует глаза кота
+        function drawEyes(centerX, centerY, size) {
+            const eyeRadius = size * 0.12;
+            const pupilRadius = size * 0.05;
+            
+            // Левый глаз
+            ctx.fillStyle = '#FFFFFF';
+            ctx.beginPath();
+            ctx.arc(centerX - size * 0.15, centerY - size * 0.2, eyeRadius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Левый зрачок
+            ctx.fillStyle = '#000000';
+            ctx.beginPath();
+            ctx.arc(centerX - size * 0.15, centerY - size * 0.2, pupilRadius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Блик в левом глазу
+            ctx.fillStyle = '#FFFFFF';
+            ctx.beginPath();
+            ctx.arc(centerX - size * 0.18, centerY - size * 0.22, pupilRadius * 0.5, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Правый глаз
+            ctx.fillStyle = '#FFFFFF';
+            ctx.beginPath();
+            ctx.arc(centerX + size * 0.15, centerY - size * 0.2, eyeRadius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Правый зрачок
+            ctx.fillStyle = '#000000';
+            ctx.beginPath();
+            ctx.arc(centerX + size * 0.15, centerY - size * 0.2, pupilRadius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Блик в правом глазу
+            ctx.fillStyle = '#FFFFFF';
+            ctx.beginPath();
+            ctx.arc(centerX + size * 0.12, centerY - size * 0.22, pupilRadius * 0.5, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Рисует носик кота
+        function drawNose(centerX, centerY, size) {
+            ctx.fillStyle = '#FFB6C1';
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY - size * 0.1);
+            ctx.lineTo(centerX - size * 0.05, centerY - size * 0.05);
+            ctx.lineTo(centerX + size * 0.05, centerY - size * 0.05);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        // Рисует усы кота
+        function drawWhiskers(centerX, centerY, size) {
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 1;
+            
+            // Левые усы
+            for (let i = 0; i < 3; i++) {
+                const yOffset = i * size * 0.05 - size * 0.05;
+                ctx.beginPath();
+                ctx.moveTo(centerX - size * 0.05, centerY - size * 0.05 + yOffset);
+                ctx.lineTo(centerX - size * 0.25, centerY - size * 0.05 + yOffset);
+                ctx.stroke();
+            }
+            
+            // Правые усы
+            for (let i = 0; i < 3; i++) {
+                const yOffset = i * size * 0.05 - size * 0.05;
+                ctx.beginPath();
+                ctx.moveTo(centerX + size * 0.05, centerY - size * 0.05 + yOffset);
+                ctx.lineTo(centerX + size * 0.25, centerY - size * 0.05 + yOffset);
+                ctx.stroke();
+            }
+        }
+
+        // Рисует лапки кота
+        function drawPaws(centerX, centerY, size) {
+            ctx.fillStyle = COLORS.CAT_MAIN;
+            
+            // Передние лапки
+            ctx.beginPath();
+            ctx.ellipse(centerX - size * 0.3, centerY + size * 0.35, size * 0.1, size * 0.08, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.beginPath();
+            ctx.ellipse(centerX + size * 0.3, centerY + size * 0.35, size * 0.1, size * 0.08, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Задние лапки
+            ctx.beginPath();
+            ctx.ellipse(centerX - size * 0.25, centerY + size * 0.4, size * 0.12, size * 0.1, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.beginPath();
+            ctx.ellipse(centerX + size * 0.25, centerY + size * 0.4, size * 0.12, size * 0.1, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Рисует хвост кота
+        function drawTail(centerX, centerY, size) {
+            ctx.strokeStyle = COLORS.CAT_MAIN;
+            ctx.lineWidth = size * 0.08;
+            ctx.lineCap = 'round';
+            
+            ctx.beginPath();
+            ctx.moveTo(centerX + size * 0.4, centerY + size * 0.2);
+            ctx.bezierCurveTo(
+                centerX + size * 0.6, centerY + size * 0.1,
+                centerX + size * 0.7, centerY + size * 0.3,
+                centerX + size * 0.5, centerY + size * 0.4
+            );
+            ctx.stroke();
+        }
+
+        // Запускаем игру при загрузке страницы
+        window.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
