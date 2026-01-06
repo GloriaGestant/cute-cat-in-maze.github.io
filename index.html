@@ -675,6 +675,45 @@
                 font-size: 2rem;
             }
         }
+        
+        .teleport-connection {
+            position: absolute;
+            pointer-events: none;
+            z-index: 5;
+        }
+        
+        .teleport-line {
+            stroke: rgba(255, 105, 180, 0.6);
+            stroke-width: 3;
+            stroke-dasharray: 5;
+            animation: dash 2s linear infinite;
+        }
+        
+        @keyframes dash {
+            to {
+                stroke-dashoffset: -20;
+            }
+        }
+        
+        .teleport-info {
+            background-color: rgba(0, 0, 0, 0.5);
+            border-radius: 8px;
+            padding: 10px;
+            margin-top: 10px;
+            font-size: 0.9rem;
+            color: #FF69B4;
+            border-left: 3px solid #FF69B4;
+        }
+        
+        .cooldown-message {
+            background-color: rgba(255, 0, 0, 0.7);
+            border-radius: 8px;
+            padding: 5px 10px;
+            margin-top: 5px;
+            font-size: 0.8rem;
+            color: white;
+            animation: fadeInOut 1s ease-in-out;
+        }
     </style>
 </head>
 <body>
@@ -697,11 +736,15 @@
                     <li>Используйте клавиши WASD или стрелки на экране, чтобы двигать котика по лабиринту</li>
                     <li>Каждое движение на новую клетку = +1 шаг</li>
                     <li>Остерегайтесь ловушек (оранжевые) - они блокируют движение на 2 секунды</li>
-                    <li>Телепорты (розовые) перемещают в случайное место</li>
+                    <li><strong>Телепорты (розовые, фиолетовые, зеленые)</strong> - двусторонние порталы. Войди в один - выйди из другого того же цвета!</li>
+                    <li><strong>Важно:</strong> После телепортации есть небольшая задержка, чтобы избежать бесконечных циклов</li>
                     <li>Односторонние пути (синие) позволяют двигаться только в направлении стрелки</li>
                     <li>Найдите зеленый выход, чтобы победить</li>
                     <li>Постарайтесь пройти лабиринт за минимальное количество шагов!</li>
                 </ul>
+                <div class="teleport-info">
+                    <strong>Совет по телепортам:</strong> Используйте телепорты как короткие пути или альтернативные маршруты через лабиринт!
+                </div>
             </div>
             <div id="firstTimeHint" class="first-time-hint">
                 Нажмите на уровень 1, чтобы начать игру!
@@ -725,6 +768,7 @@
             
             <div class="game-wrapper">
                 <canvas id="gameCanvas"></canvas>
+                <div id="teleportConnections"></div>
                 <div id="message" class="message">
                     <div class="message-title" id="messageTitle">Победа!</div>
                     <div class="message-stats">
@@ -771,6 +815,7 @@
             <div class="actions">
                 <button id="newGameBtn" class="btn btn-primary">Начать заново</button>
                 <button id="hintBtn" class="btn btn-secondary">Подсказка</button>
+                <button id="showTeleportsBtn" class="btn btn-secondary">Показать телепорты</button>
             </div>
         </div>
         
@@ -797,7 +842,9 @@
             IDLE: 'idle',
             MOVING: 'moving',
             WIN: 'win',
-            TRAPPED: 'trapped'  // Новое состояние - кот в ловушке
+            TRAPPED: 'trapped',
+            TELEPORTING: 'teleporting',
+            TELEPORT_COOLDOWN: 'teleport_cooldown'  // Новое состояние - защита от повторной телепортации
         };
 
         // Размеры лабиринта (в клетках)
@@ -814,8 +861,11 @@
             PATH: '#3A3A4A',
             TEXT: '#FFFFFF',
             HINT: 'rgba(255, 215, 0, 0.3)',
-            TRAP: '#FF4500',  // Цвет ловушки
-            TELEPORT: '#FF69B4'  // Цвет телепорта
+            TRAP: '#FF4500',
+            TELEPORT_A: '#FF69B4',
+            TELEPORT_B: '#9370DB',
+            TELEPORT_C: '#32CD32',
+            ONE_WAY: '#4682B4'
         };
 
         // Коды клеток лабиринта
@@ -824,16 +874,18 @@
             PATH: 0,
             START: 2,
             EXIT: 3,
-            TRAP: 4,      // Ловушка - блокирует на 2 секунды
-            TELEPORT: 5,  // Телепорт - перемещает в случайную точку
-            ONE_WAY_UP: 6,    // Односторонний путь (только вверх)
-            ONE_WAY_RIGHT: 7, // Односторонний путь (только вправо)
-            ONE_WAY_DOWN: 8,  // Односторонний путь (только вниз)
-            ONE_WAY_LEFT: 9   // Односторонний путь (только влево)
+            TRAP: 4,
+            TELEPORT_A: 5,
+            TELEPORT_B: 6,
+            TELEPORT_C: 7,
+            ONE_WAY_UP: 8,
+            ONE_WAY_RIGHT: 9,
+            ONE_WAY_DOWN: 10,
+            ONE_WAY_LEFT: 11
         };
 
         // =============================================
-        // ДАННЫЕ УРОВНЕЙ (ИСПРАВЛЕННЫЕ - ПРОХОДИМЫЕ)
+        // ДАННЫЕ УРОВНЕЙ С ИСПРАВЛЕННЫМИ ТЕЛЕПОРТАМИ
         // =============================================
         
         const LEVELS = [
@@ -861,12 +913,13 @@
                 unlocked: true,
                 bestScore: 0,
                 stars: 0,
-                time: 0
+                time: 0,
+                teleportPairs: []
             },
             {
                 id: 2,
-                name: "Первые ловушки",
-                description: "Появились простые ловушки",
+                name: "Простые телепорты",
+                description: "Простые двусторонние телепорты для коротких путей",
                 maze: [
                     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
                     [1, 2, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1],
@@ -877,74 +930,85 @@
                     [1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1],
                     [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 4, 0, 1],
                     [1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1],
-                    [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
+                    [1, 0, 0, 0, 1, 0, 5, 0, 1, 0, 0, 0, 0, 0, 1],
                     [1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1],
-                    [1, 0, 0, 0, 1, 4, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+                    [1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
                     [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1],
-                    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 1],
+                    [1, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 3, 1],
                     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
                 ],
                 unlocked: false,
                 bestScore: 0,
                 stars: 0,
-                time: 0
+                time: 0,
+                teleportPairs: [
+                    { type: 'A', positions: [{x: 6, y: 9}, {x: 5, y: 13}] }
+                ]
             },
             {
                 id: 3,
                 name: "Телепорты и ловушки",
-                description: "Добавлены телепорты и больше ловушек",
+                description: "Добавлены ловушки и телепорты как альтернативный путь",
                 maze: [
                     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
                     [1, 2, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1],
                     [1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1],
                     [1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1],
                     [1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1],
-                    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 1],
+                    [1, 0, 0, 0, 0, 0, 0, 4, 0, 0, 5, 0, 0, 0, 1],
                     [1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1],
-                    [1, 0, 0, 0, 0, 0, 1, 0, 4, 0, 0, 0, 0, 0, 1],
+                    [1, 0, 0, 0, 0, 4, 1, 0, 0, 0, 0, 0, 0, 0, 1],
                     [1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1],
                     [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1],
                     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1],
-                    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 1, 0, 1],
+                    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1],
                     [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1],
-                    [1, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 3, 1],
+                    [1, 0, 0, 0, 0, 6, 0, 0, 0, 6, 0, 0, 0, 3, 1],
                     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
                 ],
                 unlocked: false,
                 bestScore: 0,
                 stars: 0,
-                time: 0
+                time: 0,
+                teleportPairs: [
+                    { type: 'A', positions: [{x: 10, y: 5}, {x: 5, y: 13}] },
+                    { type: 'B', positions: [{x: 5, y: 13}, {x: 9, y: 13}] }  // ИСПРАВЛЕНО: разделил телепорты B
+                ]
             },
             {
                 id: 4,
-                name: "Односторонние пути",
-                description: "Добавлены клетки с односторонним движением (ПРОСТОЙ)",
+                name: "Сложная сеть телепортов",
+                description: "Несколько телепортов для стратегического планирования",
                 maze: [
                     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-                    [1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+                    [1, 2, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 1],
                     [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1],
                     [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
                     [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1],
                     [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
                     [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-                    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+                    [1, 0, 0, 0, 0, 6, 0, 0, 0, 0, 0, 0, 0, 0, 1],
                     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1],
                     [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
                     [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
                     [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
                     [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1],
-                    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 1],
+                    [1, 6, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 3, 1],
                     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
                 ],
                 unlocked: false,
                 bestScore: 0,
                 stars: 0,
-                time: 0
+                time: 0,
+                teleportPairs: [
+                    { type: 'A', positions: [{x: 7, y: 1}, {x: 8, y: 13}] },
+                    { type: 'B', positions: [{x: 5, y: 7}, {x: 1, y: 13}] }
+                ]
             },
             {
                 id: 5,
                 name: "Комбинированная сложность",
-                description: "Все типы ловушек вместе",
+                description: "Все типы ловушек и телепортов вместе",
                 maze: [
                     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
                     [1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
@@ -957,15 +1021,20 @@
                     [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
                     [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
                     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1],
-                    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+                    [1, 0, 0, 0, 0, 6, 0, 0, 0, 0, 0, 0, 0, 0, 1],
                     [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1],
-                    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 1],
+                    [1, 0, 0, 0, 0, 0, 0, 7, 0, 0, 0, 7, 0, 3, 1],
                     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
                 ],
                 unlocked: false,
                 bestScore: 0,
                 stars: 0,
-                time: 0
+                time: 0,
+                teleportPairs: [
+                    { type: 'A', positions: [{x: 5, y: 7}, {x: 7, y: 13}] },
+                    { type: 'B', positions: [{x: 5, y: 11}, {x: 11, y: 13}] },
+                    { type: 'C', positions: [{x: 7, y: 13}, {x: 11, y: 13}] }
+                ]
             },
             {
                 id: 6,
@@ -985,21 +1054,26 @@
                     [1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1],
                     [1, 0, 4, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1],
                     [1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1],
-                    [1, 0, 0, 1, 0, 0, 5, 0, 0, 0, 0, 0, 0, 3, 1],
+                    [1, 0, 0, 1, 0, 6, 0, 0, 7, 0, 0, 0, 0, 3, 1],
                     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
                 ],
                 unlocked: false,
                 bestScore: 0,
                 stars: 0,
-                time: 0
+                time: 0,
+                teleportPairs: [
+                    { type: 'A', positions: [{x: 5, y: 5}, {x: 8, y: 13}] },
+                    { type: 'B', positions: [{x: 5, y: 13}, {x: 8, y: 13}] },  // ИСПРАВЛЕНО: изменена позиция
+                    { type: 'C', positions: [{x: 5, y: 5}, {x: 8, y: 13}] }   // ИСПРАВЛЕНО: изменена позиция
+                ]
             }
         ];
 
         // Пороги для звезд (в шагах)
         const STAR_THRESHOLDS = {
-            1: {1: 30, 2: 40, 3: 50, 4: 40, 5: 70, 6: 80},  // 1 звезда
-            2: {1: 25, 2: 35, 3: 45, 4: 30, 5: 65, 6: 75},  // 2 звезды
-            3: {1: 20, 2: 30, 3: 40, 4: 20, 5: 60, 6: 70}   // 3 звезды
+            1: {1: 30, 2: 35, 3: 40, 4: 35, 5: 50, 6: 60},
+            2: {1: 25, 2: 30, 3: 35, 4: 30, 5: 45, 6: 55},
+            3: {1: 20, 2: 25, 3: 30, 4: 25, 5: 40, 6: 50}
         };
 
         // Игровые переменные
@@ -1015,11 +1089,18 @@
         let targetGridPos = null;
         let exitPos = {x: 13, y: 13};
         let hintVisible = false;
+        let showTeleportConnections = false;
         let currentLevel = 0;
         let gameStartTime = 0;
         let gameTime = 0;
         let timerInterval = null;
         let currentMaze = [];
+        let teleportPairs = [];
+        
+        // Новые переменные для защиты от бесконечных телепортаций
+        let lastTeleportTime = 0;
+        let teleportCooldown = 1000; // 1 секунда задержки между телепортами
+        let lastTeleportPosition = null;
 
         // Элементы DOM
         let levelSelectScreen, gameScreen;
@@ -1033,19 +1114,19 @@
         let currentLevelNumber, currentLevelName;
         let unlockAnimation, unlockedLevelName, closeUnlockBtn;
         let firstTimeHint;
+        let showTeleportsBtn;
+        let teleportConnectionsElement;
 
         // =============================================
         // ФУНКЦИИ УПРАВЛЕНИЯ УРОВНЯМИ
         // =============================================
         
-        // Загружает прогресс из localStorage
         function loadProgress() {
             const savedProgress = localStorage.getItem('catMazeProgress');
             if (savedProgress) {
                 try {
                     const progress = JSON.parse(savedProgress);
                     
-                    // Обновляем уровни из сохраненного прогресса
                     for (let i = 0; i < LEVELS.length; i++) {
                         if (progress[i]) {
                             LEVELS[i].unlocked = progress[i].unlocked || false;
@@ -1059,11 +1140,9 @@
                 }
             }
             
-            // Уровень 1 всегда разблокирован
             LEVELS[0].unlocked = true;
         }
 
-        // Сохраняет прогресс в localStorage
         function saveProgress() {
             const progress = LEVELS.map(level => ({
                 unlocked: level.unlocked,
@@ -1075,14 +1154,12 @@
             localStorage.setItem('catMazeProgress', JSON.stringify(progress));
         }
 
-        // Отображает экран выбора уровней
         function showLevelSelect() {
             if (levelSelectScreen) levelSelectScreen.style.display = 'flex';
             if (gameScreen) gameScreen.style.display = 'none';
             if (unlockAnimation) unlockAnimation.style.display = 'none';
             renderLevels();
             
-            // Показываем подсказку для новых игроков
             if (isFirstVisit() && firstTimeHint) {
                 setTimeout(() => {
                     firstTimeHint.style.display = 'block';
@@ -1093,7 +1170,6 @@
             }
         }
 
-        // Проверяет, первый ли это визит игрока
         function isFirstVisit() {
             const visited = localStorage.getItem('catMazeVisited');
             if (!visited) {
@@ -1103,7 +1179,6 @@
             return false;
         }
 
-        // Рендерит карточки уровней
         function renderLevels() {
             if (!levelsGrid) return;
             
@@ -1114,7 +1189,6 @@
                 levelCard.className = `level-card ${level.unlocked ? 'unlocked' : 'locked'}`;
                 levelCard.dataset.levelId = level.id;
                 
-                // Если уровень только что разблокирован, добавляем анимацию
                 if (level.unlocked && level.id > 1 && level.bestScore === 0) {
                     levelCard.classList.add('new');
                 }
@@ -1150,42 +1224,93 @@
             });
         }
 
-        // Начинает уровень
         function startLevel(levelId) {
             currentLevel = levelId;
             const level = LEVELS[levelId - 1];
             
-            // Обновляем информацию о текущем уровне
             if (currentLevelNumber) currentLevelNumber.textContent = level.id;
             if (currentLevelName) currentLevelName.textContent = level.name;
             if (messageLevel) messageLevel.textContent = level.id;
             
-            // Загружаем лабиринт уровня
             currentMaze = JSON.parse(JSON.stringify(level.maze));
+            teleportPairs = level.teleportPairs || [];
             
-            // Находим позиции старта и выхода
             findStartPosition();
             findExitPosition();
             
-            // Сбрасываем игровые переменные
             resetGameVariables();
             
-            // Показываем игровой экран
             if (levelSelectScreen) levelSelectScreen.style.display = 'none';
             if (gameScreen) gameScreen.style.display = 'flex';
             if (unlockAnimation) unlockAnimation.style.display = 'none';
             
-            // Запускаем таймер
             startTimer();
-            
-            // Обновляем UI
             updateUI();
-            
-            // Перерисовываем лабиринт
+            drawTeleportConnections();
             resizeCanvas();
+            
+            console.log(`Начат уровень ${levelId} с ${teleportPairs.length} парами телепортов`);
         }
 
-        // Находит позицию выхода в лабиринте
+        function drawTeleportConnections() {
+            if (!teleportConnectionsElement) return;
+            
+            teleportConnectionsElement.innerHTML = '';
+            
+            if (!showTeleportConnections) return;
+            
+            teleportPairs.forEach(pair => {
+                if (pair.positions.length >= 2) {
+                    const svgNS = "http://www.w3.org/2000/svg";
+                    const svg = document.createElementNS(svgNS, "svg");
+                    svg.classList.add('teleport-connection');
+                    
+                    svg.setAttribute('width', canvas.width);
+                    svg.setAttribute('height', canvas.height);
+                    svg.style.position = 'absolute';
+                    svg.style.top = '0';
+                    svg.style.left = '0';
+                    svg.style.pointerEvents = 'none';
+                    
+                    for (let i = 0; i < pair.positions.length - 1; i++) {
+                        for (let j = i + 1; j < pair.positions.length; j++) {
+                            const pos1 = pair.positions[i];
+                            const pos2 = pair.positions[j];
+                            
+                            const x1 = pos1.x * cellSize + cellSize / 2;
+                            const y1 = pos1.y * cellSize + cellSize / 2;
+                            const x2 = pos2.x * cellSize + cellSize / 2;
+                            const y2 = pos2.y * cellSize + cellSize / 2;
+                            
+                            const line = document.createElementNS(svgNS, "line");
+                            line.classList.add('teleport-line');
+                            line.setAttribute('x1', x1);
+                            line.setAttribute('y1', y1);
+                            line.setAttribute('x2', x2);
+                            line.setAttribute('y2', y2);
+                            
+                            let color;
+                            switch(pair.type) {
+                                case 'A': color = COLORS.TELEPORT_A; break;
+                                case 'B': color = COLORS.TELEPORT_B; break;
+                                case 'C': color = COLORS.TELEPORT_C; break;
+                                default: color = COLORS.TELEPORT_A;
+                            }
+                            
+                            line.setAttribute('stroke', color);
+                            line.setAttribute('stroke-opacity', '0.6');
+                            line.setAttribute('stroke-width', '3');
+                            line.setAttribute('stroke-dasharray', '5');
+                            
+                            svg.appendChild(line);
+                        }
+                    }
+                    
+                    teleportConnectionsElement.appendChild(svg);
+                }
+            });
+        }
+
         function findExitPosition() {
             for (let y = 0; y < MAZE_SIZE; y++) {
                 for (let x = 0; x < MAZE_SIZE; x++) {
@@ -1195,30 +1320,31 @@
                     }
                 }
             }
-            // Если не нашли выход, используем (13, 13)
             exitPos = {x: 13, y: 13};
         }
 
-        // Сбрасывает игровые переменные
         function resetGameVariables() {
             gameState = GAME_STATES.IDLE;
             steps = 0;
             moveDirection = null;
             hintVisible = false;
             gameTime = 0;
+            showTeleportConnections = false;
+            lastTeleportTime = 0;
+            lastTeleportPosition = null;
             
-            // Находим стартовую позицию
             findStartPosition();
             
-            // Сбрасываем пиксельную позицию
             catPixelPos.x = catGridPos.x * cellSize;
             catPixelPos.y = catGridPos.y * cellSize;
             
-            // Скрываем сообщение о победе
             if (messageElement) messageElement.classList.remove('show');
+            
+            if (showTeleportsBtn) {
+                showTeleportsBtn.textContent = "Показать телепорты";
+            }
         }
 
-        // Запускает таймер
         function startTimer() {
             gameStartTime = Date.now();
             
@@ -1232,7 +1358,6 @@
             }, 1000);
         }
 
-        // Обновляет отображение таймера
         function updateTimerDisplay() {
             if (!timerDisplay) return;
             const minutes = Math.floor(gameTime / 60);
@@ -1240,7 +1365,6 @@
             timerDisplay.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
         }
 
-        // Останавливает таймер
         function stopTimer() {
             if (timerInterval) {
                 clearInterval(timerInterval);
@@ -1248,7 +1372,6 @@
             }
         }
 
-        // Завершает уровень
         function completeLevel() {
             stopTimer();
             gameState = GAME_STATES.WIN;
@@ -1256,36 +1379,29 @@
             const level = LEVELS[currentLevel - 1];
             const starsEarned = calculateStars(steps, currentLevel);
             
-            // Обновляем лучший результат, если текущий лучше
             if (level.bestScore === 0 || steps < level.bestScore) {
                 level.bestScore = steps;
                 level.stars = starsEarned;
                 level.time = gameTime;
             } else if (steps === level.bestScore && starsEarned > level.stars) {
-                // Если шаги одинаковые, но звезд больше
                 level.stars = starsEarned;
             }
             
-            // Сохраняем прогресс
             saveProgress();
             
-            // Разблокируем следующий уровень, если он существует
             if (currentLevel < LEVELS.length) {
                 const nextLevel = LEVELS[currentLevel];
                 if (!nextLevel.unlocked) {
                     nextLevel.unlocked = true;
                     saveProgress();
                     
-                    // Показываем анимацию разблокировки
                     showUnlockAnimation(currentLevel + 1);
                 }
             }
             
-            // Показываем сообщение о победе
             showWinMessage(starsEarned);
         }
 
-        // Рассчитывает количество звезд за уровень
         function calculateStars(steps, levelId) {
             if (steps <= STAR_THRESHOLDS[3][levelId]) return 3;
             if (steps <= STAR_THRESHOLDS[2][levelId]) return 2;
@@ -1293,7 +1409,6 @@
             return 0;
         }
 
-        // Показывает анимацию разблокировки уровня
         function showUnlockAnimation(levelId) {
             const level = LEVELS[levelId - 1];
             if (unlockedLevelName) unlockedLevelName.textContent = `Уровень ${levelId}: ${level.name}`;
@@ -1304,32 +1419,21 @@
                 }, 10);
             }
             
-            // Воспроизводим звуковой эффект (эмулируем)
-            playUnlockSound();
-        }
-
-        // Эмулирует звук разблокировки
-        function playUnlockSound() {
-            // В реальном приложении здесь был бы Audio API
-            // Для примера просто создаем вибрацию на мобильных устройствах
             if (navigator.vibrate) {
                 navigator.vibrate([100, 50, 100]);
             }
         }
 
-        // Показывает сообщение о победе
         function showWinMessage(starsEarned) {
             if (!messageTitle || !finalStepsDisplay || !finalTimeDisplay) return;
             
             messageTitle.textContent = "Уровень пройден!";
             finalStepsDisplay.textContent = steps;
             
-            // Форматируем время
             const minutes = Math.floor(gameTime / 60);
             const seconds = gameTime % 60;
             finalTimeDisplay.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
             
-            // Анимируем звезды
             if (star1 && star2 && star3) {
                 star1.classList.remove('filled');
                 star2.classList.remove('filled');
@@ -1348,7 +1452,6 @@
                 }, 900);
             }
             
-            // Показываем кнопку следующего уровня только если есть следующий уровень
             if (nextLevelBtn) {
                 if (currentLevel < LEVELS.length) {
                     nextLevelBtn.style.display = 'block';
@@ -1366,11 +1469,9 @@
         // ОСНОВНЫЕ ФУНКЦИИ ИГРЫ
         // =============================================
         
-        // Инициализация игры
         function init() {
             console.log("Инициализация игры...");
             
-            // Получаем элементы DOM
             canvas = document.getElementById('gameCanvas');
             if (!canvas) {
                 console.error("Canvas не найден!");
@@ -1381,6 +1482,7 @@
             levelSelectScreen = document.getElementById('levelSelectScreen');
             gameScreen = document.getElementById('gameScreen');
             levelsGrid = document.getElementById('levelsGrid');
+            teleportConnectionsElement = document.getElementById('teleportConnections');
             
             stepsDisplay = document.getElementById('steps');
             stateDisplay = document.getElementById('stateDisplay');
@@ -1401,6 +1503,7 @@
             nextLevelBtn = document.getElementById('nextLevelBtn');
             toLevelsBtn = document.getElementById('toLevelsBtn');
             restartLevelBtn = document.getElementById('restartLevelBtn');
+            showTeleportsBtn = document.getElementById('showTeleportsBtn');
             
             upBtn = document.getElementById('upBtn');
             downBtn = document.getElementById('downBtn');
@@ -1418,29 +1521,16 @@
             
             firstTimeHint = document.getElementById('firstTimeHint');
             
-            console.log("Элементы DOM загружены:", {
-                canvas: !!canvas,
-                levelSelectScreen: !!levelSelectScreen,
-                gameScreen: !!gameScreen,
-                levelsGrid: !!levelsGrid
-            });
+            console.log("Элементы DOM загружены");
             
-            // Загружаем прогресс
             loadProgress();
-            
-            // Устанавливаем обработчики событий
             setupEventListeners();
-            
-            // Показываем экран выбора уровней
             showLevelSelect();
-            
-            // Начинаем игровой цикл
             requestAnimationFrame(gameLoop);
             
             console.log("Игра инициализирована");
         }
 
-        // Находит стартовую позицию кота в лабиринте
         function findStartPosition() {
             if (!currentMaze || currentMaze.length === 0) {
                 console.error("Лабиринт не загружен!");
@@ -1456,27 +1546,23 @@
                     }
                 }
             }
-            // Если не нашли стартовую позицию, используем (1, 1)
             catGridPos.x = 1;
             catGridPos.y = 1;
         }
 
-        // Устанавливает обработчики событий
         function setupEventListeners() {
             console.log("Настройка обработчиков событий...");
             
-            // Управление с клавиатуры
             document.addEventListener('keydown', handleKeyDown);
             
-            // Кнопки мобильного управления
             if (upBtn) upBtn.addEventListener('click', () => moveCat('up'));
             if (downBtn) downBtn.addEventListener('click', () => moveCat('down'));
             if (leftBtn) leftBtn.addEventListener('click', () => moveCat('left'));
             if (rightBtn) rightBtn.addEventListener('click', () => moveCat('right'));
             
-            // Кнопки действий
             if (restartBtn) restartBtn.addEventListener('click', () => startLevel(currentLevel));
             if (hintBtn) hintBtn.addEventListener('click', toggleHint);
+            if (showTeleportsBtn) showTeleportsBtn.addEventListener('click', toggleTeleportConnections);
             if (nextLevelBtn) nextLevelBtn.addEventListener('click', () => {
                 if (currentLevel < LEVELS.length) {
                     if (messageElement) messageElement.classList.remove('show');
@@ -1492,10 +1578,8 @@
                 setTimeout(() => startLevel(currentLevel), 300);
             });
             
-            // Кнопка возврата к уровням
             if (backToLevelsBtn) backToLevelsBtn.addEventListener('click', showLevelSelect);
             
-            // Кнопка закрытия анимации разблокировки
             if (closeUnlockBtn) closeUnlockBtn.addEventListener('click', () => {
                 if (unlockAnimation) {
                     unlockAnimation.classList.remove('show');
@@ -1506,17 +1590,26 @@
                 }
             });
             
-            // Обработка изменения размера окна
             window.addEventListener('resize', resizeCanvas);
             
             console.log("Обработчики событий настроены");
         }
 
-        // Обрабатывает нажатие клавиш
-        function handleKeyDown(e) {
-            if (gameState === GAME_STATES.WIN || gameState === GAME_STATES.TRAPPED) return;
+        function toggleTeleportConnections() {
+            showTeleportConnections = !showTeleportConnections;
             
-            // Проверяем русские и английские клавиши
+            if (showTeleportsBtn) {
+                showTeleportsBtn.textContent = showTeleportConnections ? 
+                    "Скрыть телепорты" : "Показать телепорты";
+            }
+            
+            drawTeleportConnections();
+        }
+
+        function handleKeyDown(e) {
+            if (gameState === GAME_STATES.WIN || gameState === GAME_STATES.TRAPPED || 
+                gameState === GAME_STATES.TELEPORTING || gameState === GAME_STATES.TELEPORT_COOLDOWN) return;
+            
             switch(e.key.toLowerCase()) {
                 case 'w':
                 case 'ц':
@@ -1538,17 +1631,20 @@
                 case 'arrowright':
                     moveCat('right');
                     break;
+                case 't':
+                case 'е':
+                    toggleTeleportConnections();
+                    break;
             }
         }
 
-        // Двигает кота в указанном направлении
         function moveCat(direction) {
-            // Если кот уже движется или игра завершена, игнорируем
-            if (gameState === GAME_STATES.MOVING || gameState === GAME_STATES.WIN || gameState === GAME_STATES.TRAPPED) {
+            if (gameState === GAME_STATES.MOVING || gameState === GAME_STATES.WIN || 
+                gameState === GAME_STATES.TRAPPED || gameState === GAME_STATES.TELEPORTING || 
+                gameState === GAME_STATES.TELEPORT_COOLDOWN) {
                 return;
             }
             
-            // Определяем целевую позицию
             targetGridPos = {x: catGridPos.x, y: catGridPos.y};
             
             switch(direction) {
@@ -1566,7 +1662,6 @@
                     break;
             }
             
-            // Проверяем, можно ли двигаться в целевую клетку
             if (isMoveValid(targetGridPos.x, targetGridPos.y, direction)) {
                 moveDirection = direction;
                 gameState = GAME_STATES.MOVING;
@@ -1576,21 +1671,17 @@
             }
         }
 
-        // Проверяет, является ли перемещение допустимым
         function isMoveValid(x, y, direction) {
-            // Проверяем границы лабиринта
             if (x < 0 || x >= MAZE_SIZE || y < 0 || y >= MAZE_SIZE) {
                 return false;
             }
             
             const cellType = currentMaze[y][x];
             
-            // Проверяем, не является ли клетка стеной
             if (cellType === CELL_TYPES.WALL) {
                 return false;
             }
             
-            // Проверяем односторонние пути
             if (direction) {
                 switch(cellType) {
                     case CELL_TYPES.ONE_WAY_UP:
@@ -1611,31 +1702,25 @@
             return true;
         }
 
-        // Обновляет позицию кота во время анимации
         function updateCatPosition() {
             const currentTime = Date.now();
             const elapsed = currentTime - animationStartTime;
             const progress = Math.min(elapsed / animationDuration, 1);
             
-            // Интерполяция для плавного движения
             const startX = catGridPos.x * cellSize;
             const startY = catGridPos.y * cellSize;
             const targetX = targetGridPos.x * cellSize;
             const targetY = targetGridPos.y * cellSize;
             
-            // Используем функцию easeOutQuad для более естественного движения
             const easeProgress = 1 - (1 - progress) * (1 - progress);
             
             catPixelPos.x = startX + (targetX - startX) * easeProgress;
             catPixelPos.y = startY + (targetY - startY) * easeProgress;
             
-            // Если анимация завершена
             if (progress >= 1) {
-                // Обновляем позицию кота в сетке
                 catGridPos.x = targetGridPos.x;
                 catGridPos.y = targetGridPos.y;
                 
-                // Проверяем тип клетки, на которую встал кот
                 const cellType = currentMaze[catGridPos.y][catGridPos.x];
                 
                 switch(cellType) {
@@ -1647,8 +1732,18 @@
                         activateTrap();
                         break;
                         
-                    case CELL_TYPES.TELEPORT:
-                        activateTeleport();
+                    case CELL_TYPES.TELEPORT_A:
+                    case CELL_TYPES.TELEPORT_B:
+                    case CELL_TYPES.TELEPORT_C:
+                        // Проверяем кулдаун перед телепортацией
+                        const now = Date.now();
+                        if (now - lastTeleportTime < teleportCooldown) {
+                            // Если кулдаун еще действует, просто остаемся на месте
+                            gameState = GAME_STATES.IDLE;
+                            showCooldownMessage();
+                        } else {
+                            activateTeleport(cellType);
+                        }
                         break;
                         
                     default:
@@ -1660,15 +1755,89 @@
             }
         }
 
-        // Активирует ловушку
+        // ИСПРАВЛЕННАЯ ФУНКЦИЯ ТЕЛЕПОРТАЦИИ С ЗАЩИТОЙ ОТ ЦИКЛОВ
+        function activateTeleport(teleportType) {
+            gameState = GAME_STATES.TELEPORTING;
+            if (stateDisplay) stateDisplay.textContent = "Телепортация!";
+            
+            // Запоминаем время телепортации
+            lastTeleportTime = Date.now();
+            
+            // Определяем тип телепорта (A, B или C)
+            const teleportTypeChar = String.fromCharCode(65 + (teleportType - CELL_TYPES.TELEPORT_A));
+            
+            // Находим пару телепортов для этого типа
+            const pair = teleportPairs.find(p => p.type === teleportTypeChar);
+            
+            if (!pair || pair.positions.length < 2) {
+                gameState = GAME_STATES.IDLE;
+                return;
+            }
+            
+            // Находим текущую позицию кота
+            const currentPos = {x: catGridPos.x, y: catGridPos.y};
+            
+            // Ищем парный телепорт
+            let targetPos = null;
+            
+            // Перебираем все телепорты этого типа
+            for (const pos of pair.positions) {
+                // Если это не текущая позиция кота
+                if (pos.x !== currentPos.x || pos.y !== currentPos.y) {
+                    targetPos = pos;
+                    break;
+                }
+            }
+            
+            // Если нашли целевой телепорт
+            if (targetPos) {
+                // Проверяем, доступна ли целевая клетка (не стена)
+                if (currentMaze[targetPos.y][targetPos.x] !== CELL_TYPES.WALL) {
+                    // Устанавливаем целевую позицию
+                    targetGridPos = {x: targetPos.x, y: targetPos.y};
+                    
+                    // Запоминаем позицию телепортации для защиты от циклов
+                    lastTeleportPosition = {x: currentPos.x, y: currentPos.y};
+                    
+                    // Запускаем анимацию телепортации
+                    animationStartTime = Date.now();
+                    animationDuration = 400;
+                    
+                    // Показываем сообщение
+                    showTeleportMessage(teleportTypeChar, currentPos, targetPos);
+                    
+                    // Увеличиваем счетчик шагов за использование телепорта
+                    steps++;
+                    updateUI();
+                    
+                    return;
+                }
+            }
+            
+            // Если не нашли подходящий телепорт, остаемся на месте
+            gameState = GAME_STATES.IDLE;
+        }
+
+        // Новая функция для обработки кулдауна телепортации
+        function handleTeleportCooldown() {
+            const now = Date.now();
+            const remaining = teleportCooldown - (now - lastTeleportTime);
+            
+            if (remaining > 0) {
+                gameState = GAME_STATES.TELEPORT_COOLDOWN;
+                if (stateDisplay) stateDisplay.textContent = "Перезарядка телепорта...";
+            } else {
+                gameState = GAME_STATES.IDLE;
+                lastTeleportPosition = null;
+            }
+        }
+
         function activateTrap() {
             gameState = GAME_STATES.TRAPPED;
             if (stateDisplay) stateDisplay.textContent = "В ловушке!";
             
-            // Показываем сообщение о ловушке
             showTrapMessage();
             
-            // Блокируем управление на 2 секунды
             setTimeout(() => {
                 if (gameState === GAME_STATES.TRAPPED) {
                     gameState = GAME_STATES.IDLE;
@@ -1677,45 +1846,7 @@
             }, 2000);
         }
 
-        // Активирует телепорт
-        function activateTeleport() {
-            gameState = GAME_STATES.MOVING;
-            if (stateDisplay) stateDisplay.textContent = "Телепортация!";
-            
-            // Находим все доступные клетки для телепортации
-            const availableCells = [];
-            for (let y = 0; y < MAZE_SIZE; y++) {
-                for (let x = 0; x < MAZE_SIZE; x++) {
-                    if (currentMaze[y][x] === CELL_TYPES.PATH || 
-                        currentMaze[y][x] === CELL_TYPES.START) {
-                        // Не телепортируем на текущую позицию или рядом с выходом
-                        if (!(x === catGridPos.x && y === catGridPos.y) &&
-                            !(Math.abs(x - exitPos.x) <= 1 && Math.abs(y - exitPos.y) <= 1)) {
-                            availableCells.push({x, y});
-                        }
-                    }
-                }
-            }
-            
-            if (availableCells.length > 0) {
-                // Выбираем случайную клетку
-                const randomCell = availableCells[Math.floor(Math.random() * availableCells.length)];
-                targetGridPos = randomCell;
-                
-                // Запускаем анимацию телепортации
-                animationStartTime = Date.now();
-                animationDuration = 500; // Быстрая анимация для телепортации
-                
-                // Показываем сообщение
-                showTeleportMessage();
-            } else {
-                gameState = GAME_STATES.IDLE;
-            }
-        }
-
-        // Показывает сообщение о ловушке
         function showTrapMessage() {
-            // Создаем временное сообщение
             const trapMsg = document.createElement('div');
             trapMsg.className = 'message';
             trapMsg.innerHTML = `
@@ -1727,12 +1858,10 @@
             
             document.querySelector('.game-wrapper').appendChild(trapMsg);
             
-            // Анимация появления
             setTimeout(() => {
                 trapMsg.classList.add('show');
             }, 10);
             
-            // Убираем сообщение через 1.5 секунды
             setTimeout(() => {
                 trapMsg.classList.remove('show');
                 setTimeout(() => {
@@ -1741,14 +1870,16 @@
             }, 1500);
         }
 
-        // Показывает сообщение о телепортации
-        function showTeleportMessage() {
+        function showTeleportMessage(teleportType, fromPos, toPos) {
             const teleportMsg = document.createElement('div');
             teleportMsg.className = 'message';
             teleportMsg.innerHTML = `
-                <div class="message-title" style="color: #FF69B4">Телепортация!</div>
+                <div class="message-title" style="color: ${getTeleportColor(teleportType)}">Телепорт ${teleportType}!</div>
                 <div style="margin: 20px 0; font-size: 1.2rem">
-                    Котик перемещён в случайное место!
+                    Котик перемещён от (${fromPos.x}, ${fromPos.y}) к (${toPos.x}, ${toPos.y})
+                </div>
+                <div style="margin: 10px 0; font-size: 1rem; color: #aaa">
+                    Телепорт работает в обе стороны! Задержка 1 сек.
                 </div>
             `;
             
@@ -1766,17 +1897,40 @@
             }, 1500);
         }
 
-        // Переключает отображение подсказки
+        function showCooldownMessage() {
+            const cooldownMsg = document.createElement('div');
+            cooldownMsg.className = 'cooldown-message';
+            cooldownMsg.textContent = "Телепорт перезаряжается! Подождите 1 секунду.";
+            cooldownMsg.style.position = 'absolute';
+            cooldownMsg.style.top = '50%';
+            cooldownMsg.style.left = '50%';
+            cooldownMsg.style.transform = 'translate(-50%, -50%)';
+            cooldownMsg.style.zIndex = '100';
+            
+            document.querySelector('.game-wrapper').appendChild(cooldownMsg);
+            
+            setTimeout(() => {
+                cooldownMsg.remove();
+            }, 1000);
+        }
+
+        function getTeleportColor(type) {
+            switch(type) {
+                case 'A': return COLORS.TELEPORT_A;
+                case 'B': return COLORS.TELEPORT_B;
+                case 'C': return COLORS.TELEPORT_C;
+                default: return COLORS.TELEPORT_A;
+            }
+        }
+
         function toggleHint() {
             hintVisible = !hintVisible;
             updateUI();
         }
 
-        // Обновляет интерфейс
         function updateUI() {
             if (stepsDisplay) stepsDisplay.textContent = steps;
             
-            // Обновляем отображение состояния
             if (stateDisplay) {
                 switch(gameState) {
                     case GAME_STATES.IDLE:
@@ -1791,16 +1945,29 @@
                     case GAME_STATES.TRAPPED:
                         stateDisplay.textContent = "В ловушке!";
                         break;
+                    case GAME_STATES.TELEPORTING:
+                        stateDisplay.textContent = "Телепортация!";
+                        break;
+                    case GAME_STATES.TELEPORT_COOLDOWN:
+                        stateDisplay.textContent = "Перезарядка...";
+                        break;
                 }
             }
             
-            // Обновляем текст кнопки подсказки
             if (hintBtn) {
                 hintBtn.textContent = hintVisible ? "Скрыть подсказку" : "Показать подсказку";
             }
+            
+            // Проверяем кулдаун телепортации
+            if (gameState === GAME_STATES.TELEPORT_COOLDOWN) {
+                const now = Date.now();
+                if (now - lastTeleportTime >= teleportCooldown) {
+                    gameState = GAME_STATES.IDLE;
+                    updateUI();
+                }
+            }
         }
 
-        // Изменяет размер canvas
         function resizeCanvas() {
             if (!canvas) return;
             
@@ -1809,32 +1976,26 @@
             
             const maxWidth = container.clientWidth;
             
-            // Рассчитываем размер клетки в зависимости от доступного пространства
             const calculatedCellSize = Math.max(20, Math.floor(Math.min(maxWidth / MAZE_SIZE, 40)));
             
-            // Обновляем размер клетки, только если он изменился
             if (calculatedCellSize !== cellSize) {
                 cellSize = calculatedCellSize;
                 
-                // Пересчитываем пиксельную позицию кота
                 catPixelPos.x = catGridPos.x * cellSize;
                 catPixelPos.y = catGridPos.y * cellSize;
+                
+                drawTeleportConnections();
             }
             
-            // Устанавливаем размер canvas
             canvas.width = MAZE_SIZE * cellSize;
             canvas.height = MAZE_SIZE * cellSize;
-            
-            console.log("Canvas изменен до размеров:", canvas.width, "x", canvas.height);
         }
 
         // =============================================
         // ОТРИСОВКА ИГРЫ
         // =============================================
         
-        // Основной игровой цикл
         function gameLoop() {
-            // Очищаем canvas
             if (!ctx || !canvas) {
                 requestAnimationFrame(gameLoop);
                 return;
@@ -1842,27 +2003,26 @@
             
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
-            // Отрисовываем лабиринт
             drawMaze();
             
-            // Если кот движется, обновляем его позицию
-            if (gameState === GAME_STATES.MOVING) {
+            if (gameState === GAME_STATES.MOVING || gameState === GAME_STATES.TELEPORTING) {
                 updateCatPosition();
             }
             
-            // Отрисовываем кота
+            // Проверяем кулдаун телепортации
+            if (gameState === GAME_STATES.TELEPORT_COOLDOWN) {
+                handleTeleportCooldown();
+            }
+            
             drawCat(catPixelPos.x, catPixelPos.y, cellSize);
             
-            // Отрисовываем подсказку, если она включена
             if (hintVisible) {
                 drawHint();
             }
             
-            // Продолжаем цикл
             requestAnimationFrame(gameLoop);
         }
 
-        // Отрисовывает лабиринт
         function drawMaze() {
             if (!ctx || !currentMaze || currentMaze.length === 0) return;
             
@@ -1871,7 +2031,6 @@
                     const cellX = x * cellSize;
                     const cellY = y * cellSize;
                     
-                    // Выбираем цвет в зависимости от типа клетки
                     let color;
                     switch(currentMaze[y][x]) {
                         case CELL_TYPES.PATH:
@@ -1889,30 +2048,36 @@
                         case CELL_TYPES.TRAP:
                             color = COLORS.TRAP;
                             break;
-                        case CELL_TYPES.TELEPORT:
-                            color = COLORS.TELEPORT;
+                        case CELL_TYPES.TELEPORT_A:
+                            color = COLORS.TELEPORT_A;
+                            break;
+                        case CELL_TYPES.TELEPORT_B:
+                            color = COLORS.TELEPORT_B;
+                            break;
+                        case CELL_TYPES.TELEPORT_C:
+                            color = COLORS.TELEPORT_C;
                             break;
                         case CELL_TYPES.ONE_WAY_UP:
                         case CELL_TYPES.ONE_WAY_RIGHT:
                         case CELL_TYPES.ONE_WAY_DOWN:
                         case CELL_TYPES.ONE_WAY_LEFT:
-                            color = '#4682B4'; // Синий для односторонних путей
+                            color = COLORS.ONE_WAY;
                             break;
                         default:
                             color = COLORS.PATH;
                     }
                     
-                    // Рисуем клетку
                     ctx.fillStyle = color;
                     ctx.fillRect(cellX, cellY, cellSize, cellSize);
                     
-                    // Рисуем специальные символы
                     switch(currentMaze[y][x]) {
                         case CELL_TYPES.TRAP:
                             drawTrap(cellX, cellY, cellSize);
                             break;
-                        case CELL_TYPES.TELEPORT:
-                            drawTeleport(cellX, cellY, cellSize);
+                        case CELL_TYPES.TELEPORT_A:
+                        case CELL_TYPES.TELEPORT_B:
+                        case CELL_TYPES.TELEPORT_C:
+                            drawTeleport(cellX, cellY, cellSize, currentMaze[y][x]);
                             break;
                         case CELL_TYPES.ONE_WAY_UP:
                             drawOneWay(cellX, cellY, cellSize, 'up');
@@ -1928,25 +2093,30 @@
                             break;
                     }
                     
-                    // Рисуем границы для стен
                     if (currentMaze[y][x] === CELL_TYPES.WALL) {
                         ctx.strokeStyle = '#333';
                         ctx.lineWidth = 2;
                         ctx.strokeRect(cellX, cellY, cellSize, cellSize);
                     }
                     
-                    // Рисуем выход
                     if (currentMaze[y][x] === CELL_TYPES.EXIT) {
                         drawExit(cellX, cellY, cellSize);
+                    }
+                    
+                    if (currentMaze[y][x] >= CELL_TYPES.TELEPORT_A && currentMaze[y][x] <= CELL_TYPES.TELEPORT_C) {
+                        const teleportType = String.fromCharCode(65 + (currentMaze[y][x] - CELL_TYPES.TELEPORT_A));
+                        ctx.fillStyle = '#FFFFFF';
+                        ctx.font = `bold ${cellSize * 0.5}px Arial`;
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText(teleportType, cellX + cellSize/2, cellY + cellSize/2);
                     }
                 }
             }
             
-            // Рисуем сетку
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
             ctx.lineWidth = 1;
             
-            // Вертикальные линии
             for (let x = 0; x <= MAZE_SIZE; x++) {
                 ctx.beginPath();
                 ctx.moveTo(x * cellSize, 0);
@@ -1954,7 +2124,6 @@
                 ctx.stroke();
             }
             
-            // Горизонтальные линии
             for (let y = 0; y <= MAZE_SIZE; y++) {
                 ctx.beginPath();
                 ctx.moveTo(0, y * cellSize);
@@ -1963,11 +2132,9 @@
             }
         }
 
-        // Рисует ловушку
         function drawTrap(x, y, size) {
             if (!ctx) return;
             
-            // Рисуем знак опасности
             ctx.fillStyle = '#FFFFFF';
             ctx.beginPath();
             ctx.moveTo(x + size/2, y + size*0.2);
@@ -1976,7 +2143,6 @@
             ctx.closePath();
             ctx.fill();
             
-            // Восклицательный знак
             ctx.fillStyle = '#FF4500';
             ctx.fillRect(x + size*0.47, y + size*0.3, size*0.06, size*0.3);
             ctx.beginPath();
@@ -1984,35 +2150,34 @@
             ctx.fill();
         }
 
-        // Рисует телепорт
-        function drawTeleport(x, y, size) {
+        function drawTeleport(x, y, size, teleportType) {
             if (!ctx) return;
             
-            // Спираль телепорта
-            ctx.strokeStyle = '#FFFFFF';
-            ctx.lineWidth = size * 0.08;
+            let color;
+            switch(teleportType) {
+                case CELL_TYPES.TELEPORT_A: color = COLORS.TELEPORT_A; break;
+                case CELL_TYPES.TELEPORT_B: color = COLORS.TELEPORT_B; break;
+                case CELL_TYPES.TELEPORT_C: color = COLORS.TELEPORT_C; break;
+                default: color = COLORS.TELEPORT_A;
+            }
+            
+            const time = Date.now() / 1000;
+            const pulse = Math.sin(time * 3) * 0.1 + 0.9;
+            
+            ctx.strokeStyle = color;
+            ctx.lineWidth = size * 0.08 * pulse;
             ctx.beginPath();
             ctx.arc(x + size/2, y + size/2, size*0.4, 0, Math.PI*2);
             ctx.stroke();
             
-            // Стрелки
-            ctx.fillStyle = '#FFFFFF';
+            ctx.fillStyle = color;
+            ctx.globalAlpha = 0.3;
             ctx.beginPath();
-            ctx.moveTo(x + size/2, y + size*0.1);
-            ctx.lineTo(x + size*0.6, y + size*0.3);
-            ctx.lineTo(x + size*0.4, y + size*0.3);
-            ctx.closePath();
+            ctx.arc(x + size/2, y + size/2, size*0.3, 0, Math.PI*2);
             ctx.fill();
-            
-            ctx.beginPath();
-            ctx.moveTo(x + size/2, y + size*0.9);
-            ctx.lineTo(x + size*0.6, y + size*0.7);
-            ctx.lineTo(x + size*0.4, y + size*0.7);
-            ctx.closePath();
-            ctx.fill();
+            ctx.globalAlpha = 1;
         }
 
-        // Рисует односторонний путь
         function drawOneWay(x, y, size, direction) {
             if (!ctx) return;
             
@@ -2020,7 +2185,6 @@
             
             switch(direction) {
                 case 'up':
-                    // Стрелка вверх
                     ctx.beginPath();
                     ctx.moveTo(x + size/2, y + size*0.2);
                     ctx.lineTo(x + size*0.3, y + size*0.5);
@@ -2030,7 +2194,6 @@
                     break;
                     
                 case 'right':
-                    // Стрелка вправо
                     ctx.beginPath();
                     ctx.moveTo(x + size*0.8, y + size/2);
                     ctx.lineTo(x + size*0.5, y + size*0.3);
@@ -2040,7 +2203,6 @@
                     break;
                     
                 case 'down':
-                    // Стрелка вниз
                     ctx.beginPath();
                     ctx.moveTo(x + size/2, y + size*0.8);
                     ctx.lineTo(x + size*0.3, y + size*0.5);
@@ -2050,7 +2212,6 @@
                     break;
                     
                 case 'left':
-                    // Стрелка влево
                     ctx.beginPath();
                     ctx.moveTo(x + size*0.2, y + size/2);
                     ctx.lineTo(x + size*0.5, y + size*0.3);
@@ -2061,11 +2222,9 @@
             }
         }
 
-        // Рисует выход
         function drawExit(x, y, size) {
             if (!ctx) return;
             
-            // Рисуем дверь
             ctx.fillStyle = '#228B22';
             const doorWidth = size * 0.6;
             const doorHeight = size * 0.8;
@@ -2073,13 +2232,11 @@
             const doorY = y + (size - doorHeight) / 2;
             ctx.fillRect(doorX, doorY, doorWidth, doorHeight);
             
-            // Ручка двери
             ctx.fillStyle = '#FFD700';
             ctx.beginPath();
             ctx.arc(doorX + doorWidth * 0.8, doorY + doorHeight / 2, size * 0.08, 0, Math.PI * 2);
             ctx.fill();
             
-            // Надпись "Выход"
             ctx.fillStyle = '#FFFFFF';
             ctx.font = `bold ${size * 0.3}px Arial`;
             ctx.textAlign = 'center';
@@ -2087,34 +2244,26 @@
             ctx.fillText('Выход', x + size / 2, y + size / 2);
         }
 
-        // Рисует подсказку (путь к выходу)
         function drawHint() {
             if (!ctx) return;
             
-            // Простой алгоритм поиска пути (жадный)
             let currentX = catGridPos.x;
             let currentY = catGridPos.y;
             
-            // Создаем копию лабиринта для поиска пути
             const mazeCopy = JSON.parse(JSON.stringify(currentMaze));
-            
-            // Алгоритм поиска в глубину для нахождения пути к выходу
             const path = findPathDFS(mazeCopy, currentX, currentY, exitPos.x, exitPos.y);
             
-            // Рисуем путь
             if (path && path.length > 0) {
                 for (let i = 0; i < path.length; i++) {
                     const point = path[i];
                     const cellX = point.x * cellSize;
                     const cellY = point.y * cellSize;
                     
-                    // Пропускаем текущую позицию кота и выход
                     if ((point.x === catGridPos.x && point.y === catGridPos.y) || 
                         (point.x === exitPos.x && point.y === exitPos.y)) {
                         continue;
                     }
                     
-                    // Рисуем круг-подсказку
                     ctx.fillStyle = COLORS.HINT;
                     ctx.beginPath();
                     ctx.arc(cellX + cellSize/2, cellY + cellSize/2, cellSize * 0.3, 0, Math.PI * 2);
@@ -2123,7 +2272,6 @@
             }
         }
 
-        // Простой алгоритм поиска пути в глубину
         function findPathDFS(maze, startX, startY, endX, endY) {
             const stack = [{x: startX, y: startY, path: []}];
             const visited = new Set();
@@ -2137,17 +2285,15 @@
                 
                 const newPath = [...path, {x, y}];
                 
-                // Если достигли выхода
                 if (x === endX && y === endY) {
                     return newPath;
                 }
                 
-                // Проверяем соседние клетки
                 const directions = [
-                    {dx: 0, dy: -1}, // вверх
-                    {dx: 1, dy: 0},  // вправо
-                    {dx: 0, dy: 1},  // вниз
-                    {dx: -1, dy: 0}  // влево
+                    {dx: 0, dy: -1},
+                    {dx: 1, dy: 0},
+                    {dx: 0, dy: 1},
+                    {dx: -1, dy: 0}
                 ];
                 
                 for (const dir of directions) {
@@ -2163,48 +2309,28 @@
                 }
             }
             
-            return null; // Путь не найден
+            return null;
         }
 
-        // Рисует кота (сохранена оригинальная функция)
         function drawCat(x, y, size) {
-            // Сохраняем контекст
             if (!ctx) return;
             ctx.save();
             
-            // Центр кота
             const centerX = x + size / 2;
             const centerY = y + size / 2;
             
-            // Тело (пухлый овал)
             drawBody(centerX, centerY, size);
-            
-            // Голова (круглая)
             drawHead(centerX, centerY, size);
-            
-            // Ушки
             drawEars(centerX, centerY, size);
-            
-            // Глаза
             drawEyes(centerX, centerY, size);
-            
-            // Носик
             drawNose(centerX, centerY, size);
-            
-            // Усы
             drawWhiskers(centerX, centerY, size);
-            
-            // Лапки
             drawPaws(centerX, centerY, size);
-            
-            // Хвост
             drawTail(centerX, centerY, size);
             
-            // Восстанавливаем контекст
             ctx.restore();
         }
 
-        // Рисует тело кота
         function drawBody(centerX, centerY, size) {
             const bodyWidth = size * 0.9;
             const bodyHeight = size * 0.7;
@@ -2214,14 +2340,12 @@
             ctx.ellipse(centerX, centerY + size * 0.1, bodyWidth/2, bodyHeight/2, 0, 0, Math.PI * 2);
             ctx.fill();
             
-            // Добавляем тень для объема
             ctx.fillStyle = COLORS.CAT_ACCENT;
             ctx.beginPath();
             ctx.ellipse(centerX - size * 0.1, centerY + size * 0.05, bodyWidth/2.2, bodyHeight/2.2, 0, 0, Math.PI * 2);
             ctx.fill();
         }
 
-        // Рисует голову кота
         function drawHead(centerX, centerY, size) {
             const headRadius = size * 0.4;
             
@@ -2231,12 +2355,9 @@
             ctx.fill();
         }
 
-        // Рисует ушки кота
         function drawEars(centerX, centerY, size) {
             const earSize = size * 0.25;
-            const headRadius = size * 0.4;
             
-            // Левое ухо
             ctx.fillStyle = COLORS.CAT_MAIN;
             ctx.beginPath();
             ctx.moveTo(centerX - size * 0.25, centerY - size * 0.55);
@@ -2245,7 +2366,6 @@
             ctx.closePath();
             ctx.fill();
             
-            // Внутренняя часть левого уха
             ctx.fillStyle = COLORS.CAT_EAR_INNER;
             ctx.beginPath();
             ctx.moveTo(centerX - size * 0.25, centerY - size * 0.55);
@@ -2254,7 +2374,6 @@
             ctx.closePath();
             ctx.fill();
             
-            // Правое ухо
             ctx.fillStyle = COLORS.CAT_MAIN;
             ctx.beginPath();
             ctx.moveTo(centerX + size * 0.25, centerY - size * 0.55);
@@ -2263,7 +2382,6 @@
             ctx.closePath();
             ctx.fill();
             
-            // Внутренняя часть правого уха
             ctx.fillStyle = COLORS.CAT_EAR_INNER;
             ctx.beginPath();
             ctx.moveTo(centerX + size * 0.25, centerY - size * 0.55);
@@ -2273,49 +2391,41 @@
             ctx.fill();
         }
 
-        // Рисует глаза кота
         function drawEyes(centerX, centerY, size) {
             const eyeRadius = size * 0.12;
             const pupilRadius = size * 0.05;
             
-            // Левый глаз
             ctx.fillStyle = '#FFFFFF';
             ctx.beginPath();
             ctx.arc(centerX - size * 0.15, centerY - size * 0.2, eyeRadius, 0, Math.PI * 2);
             ctx.fill();
             
-            // Левый зрачок
             ctx.fillStyle = '#000000';
             ctx.beginPath();
             ctx.arc(centerX - size * 0.15, centerY - size * 0.2, pupilRadius, 0, Math.PI * 2);
             ctx.fill();
             
-            // Блик в левом глазу
             ctx.fillStyle = '#FFFFFF';
             ctx.beginPath();
             ctx.arc(centerX - size * 0.18, centerY - size * 0.22, pupilRadius * 0.5, 0, Math.PI * 2);
             ctx.fill();
             
-            // Правый глаз
             ctx.fillStyle = '#FFFFFF';
             ctx.beginPath();
             ctx.arc(centerX + size * 0.15, centerY - size * 0.2, eyeRadius, 0, Math.PI * 2);
             ctx.fill();
             
-            // Правый зрачок
             ctx.fillStyle = '#000000';
             ctx.beginPath();
             ctx.arc(centerX + size * 0.15, centerY - size * 0.2, pupilRadius, 0, Math.PI * 2);
             ctx.fill();
             
-            // Блик в правом глазу
             ctx.fillStyle = '#FFFFFF';
             ctx.beginPath();
             ctx.arc(centerX + size * 0.12, centerY - size * 0.22, pupilRadius * 0.5, 0, Math.PI * 2);
             ctx.fill();
         }
 
-        // Рисует носик кота
         function drawNose(centerX, centerY, size) {
             ctx.fillStyle = '#FFB6C1';
             ctx.beginPath();
@@ -2326,12 +2436,10 @@
             ctx.fill();
         }
 
-        // Рисует усы кота
         function drawWhiskers(centerX, centerY, size) {
             ctx.strokeStyle = '#000000';
             ctx.lineWidth = 1;
             
-            // Левые усы
             for (let i = 0; i < 3; i++) {
                 const yOffset = i * size * 0.05 - size * 0.05;
                 ctx.beginPath();
@@ -2340,7 +2448,6 @@
                 ctx.stroke();
             }
             
-            // Правые усы
             for (let i = 0; i < 3; i++) {
                 const yOffset = i * size * 0.05 - size * 0.05;
                 ctx.beginPath();
@@ -2350,11 +2457,9 @@
             }
         }
 
-        // Рисует лапки кота
         function drawPaws(centerX, centerY, size) {
             ctx.fillStyle = COLORS.CAT_MAIN;
             
-            // Передние лапки
             ctx.beginPath();
             ctx.ellipse(centerX - size * 0.3, centerY + size * 0.35, size * 0.1, size * 0.08, 0, 0, Math.PI * 2);
             ctx.fill();
@@ -2363,7 +2468,6 @@
             ctx.ellipse(centerX + size * 0.3, centerY + size * 0.35, size * 0.1, size * 0.08, 0, 0, Math.PI * 2);
             ctx.fill();
             
-            // Задние лапки
             ctx.beginPath();
             ctx.ellipse(centerX - size * 0.25, centerY + size * 0.4, size * 0.12, size * 0.1, 0, 0, Math.PI * 2);
             ctx.fill();
@@ -2373,7 +2477,6 @@
             ctx.fill();
         }
 
-        // Рисует хвост кота
         function drawTail(centerX, centerY, size) {
             ctx.strokeStyle = COLORS.CAT_MAIN;
             ctx.lineWidth = size * 0.08;
@@ -2389,7 +2492,6 @@
             ctx.stroke();
         }
 
-        // Запускаем игру при загрузке страницы
         window.addEventListener('DOMContentLoaded', init);
     </script>
 </body>
